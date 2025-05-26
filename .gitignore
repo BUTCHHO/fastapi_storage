@@ -1,6 +1,7 @@
 ihatemylife/
+exceptions/
 __pycache__/
 venv/
-.env
+.env/
 .idea/
 logs.txt
