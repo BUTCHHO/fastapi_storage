@@ -9,11 +9,11 @@ class Archivator:
     def create_large_zip(self, archived_dir: str) -> Path:
         archivable_dir = Path(archived_dir)
         temp_dir = Path(mkdtemp())
-        zip_path = temp_dir / f"{archivable_dir.name}.zip"
+        self.zip_path = temp_dir / f"{archivable_dir.name}.zip"
 
         try:
             with ZipFile(
-                    zip_path,
+                    self.zip_path,
                     mode='w',
                     compression=ZIP_DEFLATED,
                     allowZip64=True,
@@ -28,12 +28,12 @@ class Archivator:
             shutil.rmtree(temp_dir, ignore_errors=True)
             raise e
 
-        return zip_path
+        return self.zip_path
 
-    def cleanup_temp_files(self, zip_path: Path):
-        temp_dir = zip_path.parent
+    def cleanup_temp_files(self):
+        temp_dir = self.zip_path.parent
         try:
-            zip_path.unlink(missing_ok=True)
+            self.zip_path.unlink(missing_ok=True)
             temp_dir.rmdir()
         except OSError:
             shutil.rmtree(temp_dir, ignore_errors=True)
