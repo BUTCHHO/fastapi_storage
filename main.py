@@ -1,23 +1,29 @@
 from fastapi import FastAPI, UploadFile, HTTPException, BackgroundTasks
-from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 from os import getenv
+
 load_dotenv('/home/butcho/пайтон проекты/media_storage/.env')
 STORAGE_PATH = getenv('STORAGE_PATH')
+
 from logic import StorageReader, StorageWriter, Archivator
-from utils import raise_if_path_invalid, log
-from view_handlers import FileResposeHandler
-from path_explorator import EntityDoesNotExists, EntityIsNotADir, PathGoesBeyondLimits
+from utils import PathValidEnsurer, Logger
+from view_handlers import FileResponseHandler, UploadFileHandler
+from path_explorator import EntityDoesNotExists, EntityIsNotADir
 from path_explorator import PathCreator
 
 
 
 app = FastAPI()
-storage_reader = StorageReader()
-storage_writer = StorageWriter()
+logger = Logger()
+path_ensurer = PathValidEnsurer(STORAGE_PATH)
+storage_reader = StorageReader(STORAGE_PATH)
+storage_writer = StorageWriter(STORAGE_PATH)
 archivator = Archivator()
 path_creator = PathCreator()
-file_response_handler = FileResposeHandler(archivator,storage_reader)
+file_response_handler = FileResponseHandler(archivator, storage_reader, logger, path_ensurer)
+upload_handler = UploadFileHandler(storage_reader,storage_writer, path_ensurer, logger)
+
+
 
 @app.get('/storage/{user_id}')
 def view_storage_root(user_id: int):
@@ -25,7 +31,7 @@ def view_storage_root(user_id: int):
         entities = storage_reader.get_all_entitynames_in_dir(str(user_id))
         return entities
     except Exception as e:
-        log(e)
+        logger.log(e)
         return e
 
 @app.get('/storage/{user_id}/{dpath:path}')
@@ -61,13 +67,7 @@ def download_entity_endpoint(entity_path_in_storage: str, background_tasks: Back
 
 @app.post('/upload-entity')
 async def upload_entity_endpoint(path: str, files: list[UploadFile]):
-    abs_path = storage_reader.join_with_root_path(path)
-    def is_path_valid(a): pass #TODO затычка
-    if not is_path_valid(abs_path):
-        return HTTPException(400, {'message': 'invalid path'})
-    for file in files:
-        fpath = f'{abs_path}/{file.filename}'
-        await storage_writer.async_write_from_fastapi_uploadfile_to_file(file, fpath)
+   await upload_handler.save_files_to_storage(path, files)
 
 
 

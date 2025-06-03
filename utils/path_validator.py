@@ -3,21 +3,20 @@ from os import getenv
 from path_explorator import PathGoesBeyondLimits, EntityDoesNotExists
 from path_explorator import PathValidator
 
-STORAGE_PATH = getenv('STORAGE_PATH')
+class PathValidEnsurer(PathValidator):
+    def __init__(self, STORAGE_PATH):
+        super().__init__(STORAGE_PATH)
 
-path_validator = PathValidator(STORAGE_PATH)
+    def raise_if_goes_beyond_limits(self, requesting_path: str):
+        if self.is_goes_beyond_limits(requesting_path):
+            raise PathGoesBeyondLimits(requesting_path)
 
-def raise_if_goes_beyond_limits(requesting_path: str):
-    if path_validator.is_goes_beyond_limits(requesting_path):
-        raise PathGoesBeyondLimits(requesting_path)
+    def raise_if_entity_dont_exists(self, path:str):
+        if not self.is_exists(path):
+            raise EntityDoesNotExists(path)
 
-def raise_if_entity_dont_exists(path:str):
-    if not path_validator.is_exists(path):
-        raise EntityDoesNotExists(path)
-
-def raise_if_path_invalid(path:str):
-    raise_if_goes_beyond_limits(path)
-    raise_if_entity_dont_exists(path)
-
+    def raise_if_path_invalid(self, path:str):
+        self.raise_if_goes_beyond_limits(path)
+        self.raise_if_entity_dont_exists(path)
 
 

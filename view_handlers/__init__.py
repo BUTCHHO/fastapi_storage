@@ -1,1 +1,2 @@
-from .file_response_handler import FileResposeHandler
+from .file_response_handler import FileResponseHandler
+from .upload_handler import UploadFileHandler
