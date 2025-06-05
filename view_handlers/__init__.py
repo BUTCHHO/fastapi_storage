@@ -1,2 +1,3 @@
 from .file_response_handler import FileResponseHandler
 from .upload_handler import UploadFileHandler
+from .storage_view_handler import StorageViewHandler
