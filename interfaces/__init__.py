@@ -1,1 +1,1 @@
-from .interfaces import IArchivator, IPathValidator, IStorageReader, IStorageWriter, ILogger
+from .interfaces import IArchivator, IPathValidator, IStorageReader, IStorageWriter, ILogger, IPathJoiner
