@@ -10,7 +10,6 @@ class Archivator:
         archivable_dir = Path(archived_dir)
         temp_dir = Path(mkdtemp())
         self.zip_path = temp_dir / f"{archivable_dir.name}.zip"
-
         try:
             with ZipFile(
                     self.zip_path,
@@ -23,7 +22,6 @@ class Archivator:
                     if file_path.is_file():
                         arcname = file_path.relative_to(archivable_dir)
                         zipf.write(file_path, arcname)
-
         except Exception as e:
             shutil.rmtree(temp_dir, ignore_errors=True)
             raise e

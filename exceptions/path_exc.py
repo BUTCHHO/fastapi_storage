@@ -11,3 +11,9 @@ class APIEntityDoesNotExists(HTTPException):
         if not detail:
             detail = {"message": f'entity at {path_in_storage} does not exists', "code": 'entity_does_not_exists'}
         super().__init__(status_code=status_code, detail=detail)
+
+class APIUnsupportedEntityType(HTTPException):
+    def __init__(self, entity_path_in_storage, detail=None, status_code=415):
+        if not detail:
+            detail = {"message":f'unsupported entity type {entity_path_in_storage}', "code":'unsupported_entity_type'}
+        super().__init__(status_code, detail)
