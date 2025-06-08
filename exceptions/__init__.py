@@ -1,1 +1,2 @@
-from .path_exc import APIPathGoesBeyondLimits, APIEntityDoesNotExists
+from .path_exc import APIPathGoesBeyondLimits, APIEntityDoesNotExists, APIUnsupportedEntityType
+from .init_exc import StoragePathIsNone

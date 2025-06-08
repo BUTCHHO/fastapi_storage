@@ -5,6 +5,7 @@ from path_explorator import PathGoesBeyondLimits, EntityDoesNotExists, PathValid
 class PathValidEnsurer(PathValidator):
     def __init__(self, storage_path):
         super().__init__(storage_path)
+
     def raise_if_goes_beyond_limits(self, requesting_path: str):
         if self.is_goes_beyond_limits(requesting_path):
             raise PathGoesBeyondLimits(requesting_path)

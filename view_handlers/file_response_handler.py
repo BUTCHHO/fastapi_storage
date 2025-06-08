@@ -1,6 +1,7 @@
 from fastapi.responses import FileResponse
 from fastapi import HTTPException
 from interfaces import IStorageReader, IArchivator, ILogger, IPathValidator
+from exceptions import APIPathGoesBeyondLimits, APIEntityDoesNotExists, APIUnsupportedEntityType
 from path_explorator import EntityDoesNotExists, PathGoesBeyondLimits
 from utils import get_encoded_string
 
@@ -24,6 +25,7 @@ class FileResponseHandler:
     )
         except Exception as e:
             self.logger.log(e)
+            raise e
 
     def get_zip_file_response(self, absolute_path_dir):
         try:
@@ -39,18 +41,16 @@ class FileResponseHandler:
         try:
             self.validator.raise_if_path_invalid(absolute_path)
         except PathGoesBeyondLimits:
-            raise HTTPException(status_code=403,
-                                detail={"message": f'path {entity_path_in_storage} goes beyond permitted limits', "code":"path_goes_beyond_limits"})
+            raise APIPathGoesBeyondLimits(entity_path_in_storage)
         except EntityDoesNotExists:
-            raise HTTPException(status_code=404,
-                                detail={"message": f'entity at {entity_path_in_storage} does not exists', "code":'entity_does_not_exists'})
+            raise APIEntityDoesNotExists(entity_path_in_storage)
 
-    def get_response(self, entity_path_in_storage):
-        absolute_path = self.storage_reader.join_with_root_path(entity_path_in_storage)
-        self.ensure_path_valid_or_httpexception(absolute_path, entity_path_in_storage)
-        if self.storage_reader.is_dir(entity_path_in_storage):
-            return self.get_zip_file_response(absolute_path)
-        if self.storage_reader.is_file(entity_path_in_storage):
-            return self.get_file_response(absolute_path)
+    def get_response(self, absolute_entity_path, entity_path_in_storage):
+        self.ensure_path_valid_or_httpexception(absolute_entity_path, entity_path_in_storage)
+        if self.storage_reader.is_dir(absolute_entity_path):
+            return self.get_zip_file_response(absolute_entity_path)
+        if self.storage_reader.is_file(absolute_entity_path):
+            return self.get_file_response(absolute_entity_path)
         else:
-            raise HTTPException(status_code=400, detail={"message":f'unsupported entity type {entity_path_in_storage}', "code":'unsupported_entity_type'})
+            raise APIUnsupportedEntityType(entity_path_in_storage=entity_path_in_storage)
+
