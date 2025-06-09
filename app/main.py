@@ -29,10 +29,10 @@ def view_storage_root(params: ViewStorageRootQuery = Query()):
     return {"entities": entities}
 
 
-@app.get('/storage/{path_in_storage:path}', response_model=ViewStorageResponse)
-async def view_storage(params: ViewStorageQuery = Query()):
-    abs_path = path_joiner.create_absolute_path(params.user_id, params.entity_path_in_storage)
-    path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, params.entity_path_in_storage)
+@app.get('/storage/{entity_path_in_storage:path}', response_model=ViewStorageResponse)
+async def view_storage(entity_path_in_storage: str, params: ViewStorageQuery = Query()):
+    abs_path = path_joiner.create_absolute_path(params.user_id, entity_path_in_storage)
+    path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, entity_path_in_storage)
     entities = storage_view_handler.get_list_of_entities(abs_path)
     return {"entities": entities}
 
