@@ -5,4 +5,3 @@ class ViewStorageRootQuery(BaseModel):
 
 class ViewStorageQuery(BaseModel):
     user_id: int = Field(ge=0)
-    entity_path_in_storage: str
