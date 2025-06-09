@@ -17,3 +17,4 @@ class APIUnsupportedEntityType(HTTPException):
         if not detail:
             detail = {"message":f'unsupported entity type {entity_path_in_storage}', "code":'unsupported_entity_type'}
         super().__init__(status_code, detail)
+

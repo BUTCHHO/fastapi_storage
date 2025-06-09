@@ -1,6 +1,5 @@
 from typing import Callable
 from abc import ABC, abstractmethod
-from path_explorator import DirectoryExplorer
 
 class IStorageReader(ABC):
     @abstractmethod
@@ -41,3 +40,7 @@ class ILogger(ABC):
     def log(self, exception) -> None: pass
     @abstractmethod
     def decor_log(self, func) -> Callable: pass
+
+class IPathCutter(ABC):
+    @abstractmethod
+    def cut_user_id_from_storage_path(self, path) -> str: pass

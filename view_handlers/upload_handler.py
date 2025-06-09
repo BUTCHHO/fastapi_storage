@@ -1,3 +1,4 @@
+from exceptions import APIEntityDoesNotExists
 from interfaces import IPathValidator, ILogger, IStorageWriter
 
 class UploadFileHandler:
@@ -14,6 +15,8 @@ class UploadFileHandler:
             for file in files:
                 abs_file_path_and_name = self.join_abs_fpath_and_fname(output_path, file.filename)
                 await self.storage_writer.async_write_from_fastapi_uploadfile_to_file(file, abs_file_path_and_name)
+        except FileNotFoundError:
+            raise APIEntityDoesNotExists(output_path)
         except Exception as e:
             self.logger.log(e)
             raise e
