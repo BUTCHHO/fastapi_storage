@@ -14,6 +14,7 @@ class StorageViewHandler:
     def _cut_user_id_from_entitynames(self, entities: list[str]):
         cut_entities = [self.path_cutter.cut_user_id_from_storage_path(entity) for entity in entities]
         return cut_entities
+
     def _get_all_entitynames_in_dir(self, abs_dir_path):
         entitynames = self.storage_reader.get_all_entitynames_in_dir(abs_dir_path)
         return self._cut_user_id_from_entitynames(entitynames)
