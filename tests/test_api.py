@@ -20,14 +20,24 @@ def test_view_storage():
     assert  response.status_code == 200
     assert 'entities' in response.json()
 
-def test_download_entity():
+def test_download_dir():
     url = '/download-entity'
-    params = {"user_id": 1, "entity_path_in_storage": 'images/Desert.jpg'}
+    params = {"user_id": 1, "entity_path_in_storage": 'music/nirvana'}
     response = client.get(url=url, params=params)
     headers = response.headers
     content_len = int(headers['content-length'])
     assert response.status_code == 200
     assert content_len > 0
 
+def test_download_file():
+    url = '/download-entity'
+    params = {"user_id": 1, "entity_path_in_storage": 'images/Desert.jpg'}
+    response = client.get(url=url, params=params)
+    headers = response.headers
+    content_len = int(headers['content-length'])
+    status_code = response.status_code
+    assert status_code == 200
+    assert content_len > 0
+
 def test_upload_entity():
-    print('not implemented')
+    print('not_impl')

@@ -1,12 +1,10 @@
 from fastapi import FastAPI, UploadFile, BackgroundTasks, Query
-
 from logic import StorageReader, StorageWriter, Archivator
 from utils import PathValidEnsurer, Logger, PathJoiner, PathCutter
 from view_handlers import FileResponseHandler, UploadFileHandler, StorageViewHandler
 from config import STORAGE_PATH
 from schemas.query import ViewStorageQuery, ViewStorageRootQuery, UploadQuery, DownloadQuery
 from schemas.response import ViewStorageResponse
-
 
 
 app = FastAPI()
@@ -50,8 +48,5 @@ async def upload_entity_endpoint(files: list[UploadFile], params: UploadQuery = 
     abs_path = path_joiner.create_absolute_path(params.user_id, params.path_in_storage)
     path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, params.path_in_storage)
     await upload_handler.save_files_to_storage(abs_path, files)
-
-
-
 
 
