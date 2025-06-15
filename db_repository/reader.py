@@ -1,5 +1,5 @@
 from sqlalchemy.orm import sessionmaker, Session
-from alchemy import engine
+from alchemy.models import engine
 from interfaces import ILogger
 
 

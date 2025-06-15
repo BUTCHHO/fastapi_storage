@@ -6,6 +6,7 @@ from config import STORAGE_PATH
 from schemas.query import ViewStorageQuery, ViewStorageRootQuery, UploadQuery, DownloadQuery
 from schemas.response import ViewStorageResponse
 
+#TODO refactor alchemy package, refactor db_repository
 
 app = FastAPI()
 logger = Logger()

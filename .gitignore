@@ -1,6 +1,9 @@
-ihatemylife/
 __pycache__/
 venv/
 .env/
 .idea/
+.env
+/.env
+/__pycache__/
+/__pycache
 logs.txt

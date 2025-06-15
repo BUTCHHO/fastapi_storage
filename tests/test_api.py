@@ -2,7 +2,7 @@ from fastapi import UploadFile
 from fastapi.testclient import TestClient
 
 
-from app import app
+from main import app
 client = TestClient(app)
 
 def test_view_root_storage():
