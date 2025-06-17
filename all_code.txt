@@ -146,8 +146,14 @@ class TimeHandler:
 
     def is_date_future(self, date):
         return datetime.today() < date
-from .http_exc import APIPathGoesBeyondLimits, APIEntityDoesNotExists, APIUnsupportedEntityType
-from .exc import StoragePathIsNone, NotAUserId, DatabaseUrlIsNonefrom fastapi import HTTPException
+
+    def get_today_date(self):
+        return datetime.today()
+
+    def get_str_today_date(self):
+        return self.get_today_date().strftime('%d/%m/%Y')from .http_exc import APIPathGoesBeyondLimits, APIEntityDoesNotExists, APIUnsupportedEntityType
+from .exc import StoragePathIsNone, NotAUserId, DatabaseUrlIsNone
+from .auth import UserAlreadyExists, UserDontExists, IncorrectPassword, SessionExpiredfrom fastapi import HTTPException
 
 class APIPathGoesBeyondLimits(HTTPException):
     def __init__(self, path_in_storage, detail=None, status_code=403):
@@ -180,7 +186,23 @@ class DatabaseUrlIsNone(Exception):
 class NotAUserId(Exception):
     def __init__(self, path:str):
         msg = f'path {path} dont starts with user_id. Must look like \'1/folder/file.txt\''
-        super().__init__(msg)from .file_response_handler import FileResponseHandler
+        super().__init__(msg)class UserAlreadyExists(Exception):
+    def __init__(self, name):
+        msg = f'User with name {name} already exists'
+        super().__init__(msg)
+
+class UserDontExists(Exception):
+    def __init__(self, name):
+        msg = f'User with name {name} does not exists'
+        super().__init__(msg)
+
+class IncorrectPassword(Exception):
+    def __init__(self):
+        super().__init__()
+
+class SessionExpired(Exception):
+    def __init__(self):
+        super().__init__()from .file_response_handler import FileResponseHandler
 from .upload_handler import UploadFileHandler
 from .storage_view_handler import StorageViewHandlerfrom fastapi.responses import FileResponse
 from fastapi import HTTPException
@@ -290,7 +312,7 @@ class StorageViewHandler:
             entitynames = self._get_all_entitynames_in_dir(abs_path)
             return entitynames
         except Exception as e:
-            self.logger.log(e)from .interfaces import IArchivator, IPathValidator, IStorageReader, IStorageWriter, ILogger, IPathJoiner, IPathCutter, IModelReader, IModelActorfrom typing import Callable
+            self.logger.log(e)from .interfaces import IArchivator, IPathValidator, IStorageReader, IStorageWriter, ILogger, IPathJoiner, IPathCutter, IModelReader, IModelActor, ITimeHandlerfrom typing import Callable
 from abc import ABC, abstractmethod
 
 class IStorageReader(ABC):
@@ -342,8 +364,13 @@ class IModelReader(ABC):
     def get_by_id(self, id: int): pass
     @abstractmethod
     def get_by_kwargs(self, **kwargs): pass
+    @abstractmethod
+    def does_record_with_kwargs_exists(self, **kwargs) -> bool: pass
+
 
 class IModelActor(ABC):
+    @abstractmethod
+    def create_and_write_record_to_db(self, **kwargs): pass
     @abstractmethod
     def create_record(self, **kwargs): pass
     @abstractmethod
@@ -351,7 +378,17 @@ class IModelActor(ABC):
     @abstractmethod
     def delete_record_by_kwargs(self, **kwargs): pass
     @abstractmethod
-    def delete_record_by_id(self, id): passfrom .models import User, Sessionfrom sqlalchemy import Column, Integer, String, Boolean, create_engine, Date, ForeignKey
+    def delete_record_by_id(self, id): pass
+
+class ITimeHandler(ABC):
+    @abstractmethod
+    def is_date_future(self, date) -> bool: pass
+    @abstractmethod
+    def add_days_to_current_date(self, days) -> object: pass
+    @abstractmethod
+    def get_today_date(self) -> object: pass
+    @abstractmethod
+    def get_str_today_date(self) -> str: passfrom .models import User, Sessionfrom sqlalchemy import Column, Integer, String, Boolean, create_engine, Date, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 
 from config import DATABASE_URL
@@ -540,7 +577,26 @@ def test_ensurer_goes_beyond_limits():
     is_unsafe_rel = ensurer.is_goes_beyond_limits(beyond_rel_path)
     is_safe = not ensurer.is_goes_beyond_limits(safe_path)
     assert is_unsafe == is_unsafe_rel == is_safe == True
-from .session_maker import SessionMakerfrom interfaces import IModelActor
+from .session_maker import SessionMakerfrom exceptions import UserAlreadyExists
+from psycopg2.errors import UniqueViolation
+
+class UserRegistration:
+    def __init__(self, db_reader, db_actor, hash_func, logger):
+        self._reader = db_reader
+        self._actor = db_actor
+        self.hash_func = hash_func
+        self.logger = logger
+
+    def create_user(self, name, password):
+        try:
+            password = self.hash_func(password)
+            self._actor.create_amd_write_record_to_db(name, password)
+        except UniqueViolation:
+            raise UserAlreadyExists(name)
+        except Exception as e:
+            self.logger.log(e)
+
+from interfaces import IModelActor
 from werkzeug.security import generate_password_hash
 
 class SessionMaker:
@@ -567,10 +623,72 @@ class SessionMaker:
 
     def create_session(self, user_id, username):
         session = self._create_session_obj(user_id, username)
-        print(session)
         self._access.write_record_to_db(session)
-from .reader import ModelReader
-from .actor import ModelActorfrom .parent_access import ParentAccess
+from interfaces import ITimeHandler
+
+
+class SessionValidator:
+    def __init__(self, time_handler):
+        self.time_handler: ITimeHandler = time_handler
+
+    def check_if_session_expired(self, session_expire_date):
+        if self.time_handler.is_date_future(session_expire_date):
+            return False
+        return True
+
+from interfaces import IModelReader
+from exceptions import UserDontExists, IncorrectPassword, SessionExpired
+
+
+class UserAuthentication:
+    def __init__(self, user_reader, session_validator, session_maker, session_getter, logger, password_check_func):
+        self.user_reader: IModelReader = user_reader
+        self.session_maker = session_maker
+        self.password_check_func = password_check_func
+        self.logger = logger
+        self.session_getter = session_getter
+        self.session_validator = session_validator
+
+    def get_user_with_name(self, name):
+        return self.user_reader.get_by_kwargs(name=name)
+
+    def is_password_correct(self, password, actual_password):
+        return self.password_check_func(password, actual_password)
+
+    def authenticate_and_return_session(self, name, password):
+        try:
+            user = self.get_user_with_name(name)
+            if user is None:
+                raise UserDontExists(name)
+            if not self.is_password_correct(password, user.password):
+                raise IncorrectPassword
+            self.session_maker.create_session(user.id, user.name)
+            session = self.session_getter.get_session_by_user_id(user.id)
+            return session.id
+        except Exception as e:
+            self.logger.log(e)
+
+
+    def get_user(self, session):
+        try:
+            if self.session_validator.check_if_session_expired(session.expire_date):
+                raise SessionExpired
+            return self.user_reader.get_by_id(session.user_id)
+        except Exception as e:
+            self.logger.log(e)
+class SessionGetter:
+    def __init__(self, db_reader):
+        self.reader = db_reader
+
+
+    def get_session_by_user_id(self, user_id):
+        return self.reader.get_record_by(user_id=user_id)
+
+    def get_session_by_id(self, id):
+        return self.reader.get_record_by_id(id)from .reader import ModelReader
+from .actor import ModelActorfrom sqlalchemy.orm import Session
+
+from .parent_access import ParentAccess
 
 class ModelReader(ParentAccess):
     def __init__(self, model, logger):
@@ -592,20 +710,39 @@ class ModelReader(ParentAccess):
         except Exception as e:
             self.logger.log(e)
         finally:
+            session.close()
+
+    def does_record_with_id_exists(self, id):
+        session: Session = self.session()
+        try:
+            return session.query(self.model).filter_by(id=id).exists()
+        except Exception as e:
+            self.logger.log(e)
+        finally:
+            session.close()
+
+    def does_record_with_kwargs_exists(self, **kwargs):
+        session = self.session()
+        try:
+            return session.query(self.model).filter_by(**kwargs).exists()
+        except Exception as e:
+            self.logger.log(e)
+        finally:
             session.close()from .parent_access import ParentAccess
 
 class ModelActor(ParentAccess):
     def __init__(self, model, logger):
         super().__init__(model, logger)
 
+    def create_and_write_record_to_db(self, **kwargs):
+        record = self.create_record(**kwargs)
+        self.write_record_to_db(record)
+
     def write_record_to_db(self, record):
         session = self.session()
         try:
             session.add(record)
             session.commit()
-        except Exception as e:
-            self.logger.log(e)
-            session.rollback()
         finally:
             session.close()
 
@@ -668,11 +805,9 @@ file_response_handler = FileResponseHandler(archivator, storage_reader, logger, 
 upload_handler = UploadFileHandler(storage_writer, path_ensurer, logger)
 storage_view_handler = StorageViewHandler(storage_reader, logger, path_joiner, path_cutter)
 
-token_schema = OAuth2PasswordBearer(tokenUrl='token_url')
-
 
 @app.get('/storage', response_model=ViewStorageResponse)
-def view_storage_root(token: Annotated[str, Depends(token_schema)], params: ViewStorageRootQuery = Query()):
+def view_storage_root(params: ViewStorageRootQuery = Query()):
     abs_path = path_joiner.join_with_root_path(params.user_id)
     path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, params.user_id)
     entities = storage_view_handler.get_list_of_entities(abs_path)
@@ -680,14 +815,14 @@ def view_storage_root(token: Annotated[str, Depends(token_schema)], params: View
 
 
 @app.get('/storage/{entity_path_in_storage:path}', response_model=ViewStorageResponse)
-async def view_storage(token: Annotated[str, Depends(token_schema)], entity_path_in_storage: str, params: ViewStorageQuery = Query()):
+async def view_storage(entity_path_in_storage: str, params: ViewStorageQuery = Query()):
     abs_path = path_joiner.create_absolute_path(params.user_id, entity_path_in_storage)
     path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, entity_path_in_storage)
     entities = storage_view_handler.get_list_of_entities(abs_path)
     return {"entities": entities}
 
 @app.get('/download-entity')
-def download_entity_endpoint(token: Annotated[str, Depends(token_schema)], background_tasks: BackgroundTasks, params: DownloadQuery = Query()):
+def download_entity_endpoint(background_tasks: BackgroundTasks, params: DownloadQuery = Query()):
     abs_path = path_joiner.create_absolute_path(params.user_id, params.entity_path_in_storage)
     path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, params.entity_path_in_storage)
     response = file_response_handler.get_response(abs_path, params.entity_path_in_storage)
@@ -696,7 +831,7 @@ def download_entity_endpoint(token: Annotated[str, Depends(token_schema)], backg
 
 
 @app.post('/upload-entity')
-async def upload_entity_endpoint(token: Annotated[str, Depends(token_schema)], files: list[UploadFile], params: UploadQuery = Query()):
+async def upload_entity_endpoint(files: list[UploadFile], params: UploadQuery = Query()):
     abs_path = path_joiner.create_absolute_path(params.user_id, params.path_in_storage)
     path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, params.path_in_storage)
     await upload_handler.save_files_to_storage(abs_path, files)

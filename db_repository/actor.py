@@ -4,14 +4,15 @@ class ModelActor(ParentAccess):
     def __init__(self, model, logger):
         super().__init__(model, logger)
 
+    def create_and_write_record_to_db(self, **kwargs):
+        record = self.create_record(**kwargs)
+        self.write_record_to_db(record)
+
     def write_record_to_db(self, record):
         session = self.session()
         try:
             session.add(record)
             session.commit()
-        except Exception as e:
-            self.logger.log(e)
-            session.rollback()
         finally:
             session.close()
 

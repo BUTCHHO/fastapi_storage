@@ -50,8 +50,13 @@ class IModelReader(ABC):
     def get_by_id(self, id: int): pass
     @abstractmethod
     def get_by_kwargs(self, **kwargs): pass
+    @abstractmethod
+    def does_record_with_kwargs_exists(self, **kwargs) -> bool: pass
+
 
 class IModelActor(ABC):
+    @abstractmethod
+    def create_and_write_record_to_db(self, **kwargs): pass
     @abstractmethod
     def create_record(self, **kwargs): pass
     @abstractmethod
@@ -60,3 +65,13 @@ class IModelActor(ABC):
     def delete_record_by_kwargs(self, **kwargs): pass
     @abstractmethod
     def delete_record_by_id(self, id): pass
+
+class ITimeHandler(ABC):
+    @abstractmethod
+    def is_date_future(self, date) -> bool: pass
+    @abstractmethod
+    def add_days_to_current_date(self, days) -> object: pass
+    @abstractmethod
+    def get_today_date(self) -> object: pass
+    @abstractmethod
+    def get_str_today_date(self) -> str: pass

@@ -8,3 +8,5 @@ venv/
 /__pycache
 logs.txt
 all_code.txt
+.all_code.txt
+./all_code.txt

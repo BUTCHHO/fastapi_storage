@@ -9,3 +9,9 @@ class TimeHandler:
 
     def is_date_future(self, date):
         return datetime.today() < date
+
+    def get_today_date(self):
+        return datetime.today()
+
+    def get_str_today_date(self):
+        return self.get_today_date().strftime('%d/%m/%Y')

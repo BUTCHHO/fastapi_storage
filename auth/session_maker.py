@@ -25,5 +25,4 @@ class SessionMaker:
 
     def create_session(self, user_id, username):
         session = self._create_session_obj(user_id, username)
-        print(session)
         self._access.write_record_to_db(session)
