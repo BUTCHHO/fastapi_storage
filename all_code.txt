@@ -50,7 +50,8 @@ class StorageWriter(DirectoryActor):
 from .path_creator import PathJoiner
 from .logger import Logger
 from .text_encoding import get_encoded_string
-from .path_cutter import PathCutterfrom exceptions import APIPathGoesBeyondLimits
+from .path_cutter import PathCutter
+from .time_handler import TimeHandlerfrom exceptions import APIPathGoesBeyondLimits
 from path_explorator import PathGoesBeyondLimits, EntityDoesNotExists, PathValidator
 
 
@@ -539,7 +540,7 @@ def test_ensurer_goes_beyond_limits():
     is_unsafe_rel = ensurer.is_goes_beyond_limits(beyond_rel_path)
     is_safe = not ensurer.is_goes_beyond_limits(safe_path)
     assert is_unsafe == is_unsafe_rel == is_safe == True
-from interfaces import IModelActor
+from .session_maker import SessionMakerfrom interfaces import IModelActor
 from werkzeug.security import generate_password_hash
 
 class SessionMaker:
@@ -564,10 +565,11 @@ class SessionMaker:
         hashed_id = generate_password_hash(username, salt_length=length)
         return hashed_id[hash_start_id:hash_end_id] #итого длина хэша на выходе 50 символов
 
-    def create_session_and_ret_id(self, user_id, username):
+    def create_session(self, user_id, username):
         session = self._create_session_obj(user_id, username)
+        print(session)
         self._access.write_record_to_db(session)
-        return session.idfrom .reader import ModelReader
+from .reader import ModelReader
 from .actor import ModelActorfrom .parent_access import ParentAccess
 
 class ModelReader(ParentAccess):
@@ -646,7 +648,7 @@ from fastapi.security import OAuth2PasswordBearer
 from typing import Annotated
 
 from logic import StorageReader, StorageWriter, Archivator
-from utils import PathValidEnsurer, Logger, PathJoiner, PathCutter
+from utils import PathValidEnsurer, Logger, PathJoiner, PathCutter, TimeHandler
 from view_handlers import FileResponseHandler, UploadFileHandler, StorageViewHandler
 from config import STORAGE_PATH
 from schemas.query import ViewStorageQuery, ViewStorageRootQuery, UploadQuery, DownloadQuery
@@ -667,6 +669,7 @@ upload_handler = UploadFileHandler(storage_writer, path_ensurer, logger)
 storage_view_handler = StorageViewHandler(storage_reader, logger, path_joiner, path_cutter)
 
 token_schema = OAuth2PasswordBearer(tokenUrl='token_url')
+
 
 @app.get('/storage', response_model=ViewStorageResponse)
 def view_storage_root(token: Annotated[str, Depends(token_schema)], params: ViewStorageRootQuery = Query()):
@@ -697,3 +700,5 @@ async def upload_entity_endpoint(token: Annotated[str, Depends(token_schema)], f
     abs_path = path_joiner.create_absolute_path(params.user_id, params.path_in_storage)
     path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, params.path_in_storage)
     await upload_handler.save_files_to_storage(abs_path, files)
+
+
