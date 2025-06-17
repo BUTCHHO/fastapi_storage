@@ -1,0 +1,699 @@
+from .directory_reader import StorageReader
+from .archivator import Archivator
+from .storage_writer import StorageWriterfrom path_explorator import DirectoryExplorer
+
+class StorageReader(DirectoryExplorer):
+    def __init__(self, root_dir):
+        super().__init__(root_dir)
+from pathlib import Path
+from tempfile import mkdtemp
+from zipfile import ZipFile, ZIP_DEFLATED
+
+
+class Archivator:
+    def __init__(self):
+        self._zip_path = None
+        self.tmp_dir = Path(mkdtemp())
+
+    def has_zip_path(self):
+        return self._zip_path is not None
+
+    def make_zip_in_tmp_dir(self, archivable_dir):
+        return self.tmp_dir / f"{archivable_dir.name}.zip"
+
+    def write_from_dir_to_zip(self, dir, zip):
+        with ZipFile(zip, mode='w', compression=ZIP_DEFLATED, allowZip64=True, compresslevel=6) as zipf:
+            for file_path in dir.rglob('*'):
+                if file_path.is_file():
+                    entity = file_path.relative_to(dir)
+                    zipf.write(file_path, entity)
+
+    def cleanup_temp_files(self):
+        if self.has_zip_path():
+            self._cleanup()
+            self._zip_path = None
+
+    def _cleanup(self):
+        self._zip_path.unlink(missing_ok=True)
+
+    def create_large_zip(self, archivable_dir_path: str) -> Path:
+        archivable_dir = Path(archivable_dir_path)
+        self._zip_path = self.make_zip_in_tmp_dir(archivable_dir)
+        self.write_from_dir_to_zip(archivable_dir, self._zip_path)
+        return self._zip_path
+from path_explorator import DirectoryActor
+
+
+class StorageWriter(DirectoryActor):
+    def __init__(self, root_dir):
+        super().__init__(root_dir)from .path_validator import PathValidEnsurer
+from .path_creator import PathJoiner
+from .logger import Logger
+from .text_encoding import get_encoded_string
+from .path_cutter import PathCutterfrom exceptions import APIPathGoesBeyondLimits
+from path_explorator import PathGoesBeyondLimits, EntityDoesNotExists, PathValidator
+
+
+class PathValidEnsurer(PathValidator):
+    def __init__(self, storage_path):
+        super().__init__(storage_path)
+
+    def raise_if_goes_beyond_limits(self, requesting_path: str):
+        if self.is_goes_beyond_limits(requesting_path):
+            raise PathGoesBeyondLimits(requesting_path)
+
+    def raise_if_entity_dont_exists(self, path:str):
+        if not self.is_exists(path):
+            raise EntityDoesNotExists(path)
+
+    def raise_if_path_invalid(self, path:str):
+        self.raise_if_goes_beyond_limits(path)
+        self.raise_if_entity_dont_exists(path)
+
+    def ensure_path_safety_on_endpoint_level(self, abs_path, path_in_storage):
+        try:
+            self.raise_if_goes_beyond_limits(abs_path)
+        except PathGoesBeyondLimits:
+            raise APIPathGoesBeyondLimits(path_in_storage)
+
+
+class Logger:
+
+    @staticmethod
+    def log(exception):
+        print(f'LOG {exception}')
+
+    @staticmethod
+    def decor_log(func):
+        def wrapper(*args, **kwargs):
+            try:
+                result = func(*args, **kwargs)
+                return result
+            except Exception as e:
+                Logger.log(e)
+        return wrapper
+from urllib.parse import quote
+
+
+def get_encoded_string(string):
+    return quote(string)
+
+from path_explorator import PathCreator
+
+
+class PathJoiner(PathCreator):
+    def __init__(self, root_path):
+        self.root_path = root_path
+        super().__init__()
+
+    @property
+    def root(self):
+        return self.root_path
+
+    def join_with_root_path(self, path:str | int):
+        if isinstance(path, int):
+            path = str(path)
+        return self.join_paths(self.root_path, path)
+
+    def create_absolute_path(self, user_id, entity_path_in_storage):
+        user_id = str(user_id)
+        path_in_storage_with_id = self.join_paths(user_id, entity_path_in_storage)
+        return self.join_with_root_path(path_in_storage_with_id)from exceptions import NotAUserId
+
+class PathCutter:
+
+    def _get_id_part(self, path:str) -> str:
+        max_split = 1
+        return path.split('/', max_split)[0]
+
+    def cut_user_id_from_storage_path(self, path: str):
+        path = path.lstrip('/') # input path looks like /{id}/folder/file.txt. removing first slash
+        id_part = self._get_id_part(path)
+        if not id_part.isdigit():
+            raise NotAUserId(path)
+        return path.removeprefix(id_part)from datetime import datetime
+
+
+print(datetime.astimezone())from datetime import datetime, timedelta
+
+class TimeHandler:
+    def add_days_to_current_date(self, days):
+        time_delta = timedelta(days=days)
+        now = datetime.today()
+        new_date = now + time_delta
+        return new_date
+
+    def is_date_future(self, date):
+        return datetime.today() < date
+from .http_exc import APIPathGoesBeyondLimits, APIEntityDoesNotExists, APIUnsupportedEntityType
+from .exc import StoragePathIsNone, NotAUserId, DatabaseUrlIsNonefrom fastapi import HTTPException
+
+class APIPathGoesBeyondLimits(HTTPException):
+    def __init__(self, path_in_storage, detail=None, status_code=403):
+        if not detail:
+            detail = {"message": f'path {path_in_storage} is goes beyond limits', "code": 'path_goes_beyond_limits'}
+        super().__init__(status_code=status_code, detail=detail)
+
+class APIEntityDoesNotExists(HTTPException):
+    def __init__(self, path_in_storage, detail=None, status_code=404):
+        if not detail:
+            detail = {"message": f'entity at {path_in_storage} does not exists', "code": 'entity_does_not_exists'}
+        super().__init__(status_code=status_code, detail=detail)
+
+class APIUnsupportedEntityType(HTTPException):
+    def __init__(self, entity_path_in_storage, detail=None, status_code=415):
+        if not detail:
+            detail = {"message":f'unsupported entity type {entity_path_in_storage}', "code":'unsupported_entity_type'}
+        super().__init__(status_code, detail)
+
+class StoragePathIsNone(Exception):
+    def __init__(self):
+        msg = 'STORAGE_PATH value from .env file is None. Must be filled'
+        super().__init__(msg)
+
+class DatabaseUrlIsNone(Exception):
+    def __init__(self):
+        msg = 'DATABASE_URL value from .env file is None. Must be filled'
+        super().__init__(msg)
+
+class NotAUserId(Exception):
+    def __init__(self, path:str):
+        msg = f'path {path} dont starts with user_id. Must look like \'1/folder/file.txt\''
+        super().__init__(msg)from .file_response_handler import FileResponseHandler
+from .upload_handler import UploadFileHandler
+from .storage_view_handler import StorageViewHandlerfrom fastapi.responses import FileResponse
+from fastapi import HTTPException
+from interfaces import IStorageReader, IArchivator, ILogger, IPathValidator
+from exceptions import APIPathGoesBeyondLimits, APIEntityDoesNotExists, APIUnsupportedEntityType
+from path_explorator import EntityDoesNotExists, PathGoesBeyondLimits
+from utils import get_encoded_string
+
+
+class FileResponseHandler:
+    def __init__(self, archivator, storage_reader, logger, path_validator):
+        self.archivator: IArchivator = archivator
+        self.storage_reader: IStorageReader = storage_reader
+        self.logger: ILogger = logger
+        self.validator: IPathValidator = path_validator
+        self.encode_string = get_encoded_string
+
+    def _make_response(self, path_to_entity):
+        try:
+            str_path_to_entity = path_to_entity.__str__()
+            entity_name = self.storage_reader.get_name(str_path_to_entity)
+            encoded_entity_name = self.encode_string(entity_name)
+            return FileResponse(path_to_entity,
+                                filename=f'{entity_name}',
+                                headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_entity_name}"},
+    )
+        except Exception as e:
+            self.logger.log(e)
+            raise e
+
+    def get_zip_file_response(self, absolute_path_dir):
+        try:
+            zip_path = self.archivator.create_large_zip(absolute_path_dir)
+            return self._make_response(zip_path)
+        except Exception as e:
+            self.logger.log(e)
+
+    def get_file_response(self, absolute_path_file):
+        return self._make_response(absolute_path_file)
+
+    def ensure_path_valid_or_httpexception(self, absolute_path, entity_path_in_storage):
+        try:
+            self.validator.raise_if_path_invalid(absolute_path)
+        except PathGoesBeyondLimits:
+            raise APIPathGoesBeyondLimits(entity_path_in_storage)
+        except EntityDoesNotExists:
+            raise APIEntityDoesNotExists(entity_path_in_storage)
+
+    def get_response(self, absolute_entity_path, entity_path_in_storage):
+        self.ensure_path_valid_or_httpexception(absolute_entity_path, entity_path_in_storage)
+        if self.storage_reader.is_dir(absolute_entity_path):
+            return self.get_zip_file_response(absolute_entity_path)
+        if self.storage_reader.is_file(absolute_entity_path):
+            return self.get_file_response(absolute_entity_path)
+        else:
+            raise APIUnsupportedEntityType(entity_path_in_storage=entity_path_in_storage)
+
+from exceptions import APIEntityDoesNotExists
+from interfaces import IPathValidator, ILogger, IStorageWriter
+
+class UploadFileHandler:
+    def __init__(self, storage_writer, validator, logger):
+        self.storage_writer: IStorageWriter = storage_writer
+        self.validator: IPathValidator = validator
+        self.logger: ILogger = logger
+
+    def join_abs_fpath_and_fname(self, abs_path, fname):
+        return f'{abs_path}/{fname}'
+
+    async def _iterate_and_save_files_to_storage(self, files: list, output_path):
+        try:
+            for file in files:
+                abs_file_path_and_name = self.join_abs_fpath_and_fname(output_path, file.filename)
+                await self.storage_writer.async_write_from_fastapi_uploadfile_to_file(file, abs_file_path_and_name)
+        except FileNotFoundError:
+            raise APIEntityDoesNotExists(output_path)
+        except Exception as e:
+            self.logger.log(e)
+            raise e
+
+    async def save_files_to_storage(self, absolute_path, files: list):
+        await self._iterate_and_save_files_to_storage(files, absolute_path)
+
+from interfaces import ILogger, IStorageReader, IPathJoiner, IPathCutter
+
+class StorageViewHandler:
+    def __init__(self, storage_reader, logger, path_joiner, path_cutter):
+        self.storage_reader: IStorageReader = storage_reader
+        self.logger: ILogger = logger
+        self.path_joiner: IPathJoiner = path_joiner
+        self.path_cutter: IPathCutter = path_cutter
+
+    def _get_abs_path(self, user_id, path_to_dir):
+        path_with_user_id = self.path_joiner.join_paths(user_id, path_to_dir)
+        return self.storage_reader.join_with_root_path(path_with_user_id)
+
+    def _cut_user_id_from_entitynames(self, entities: list[str]):
+        cut_entities = [self.path_cutter.cut_user_id_from_storage_path(entity) for entity in entities]
+        return cut_entities
+
+    def _get_all_entitynames_in_dir(self, abs_dir_path):
+        entitynames = self.storage_reader.get_all_entitynames_in_dir(abs_dir_path)
+        return self._cut_user_id_from_entitynames(entitynames)
+
+    def get_list_of_entities(self, abs_path):
+        try:
+            entitynames = self._get_all_entitynames_in_dir(abs_path)
+            return entitynames
+        except Exception as e:
+            self.logger.log(e)from .interfaces import IArchivator, IPathValidator, IStorageReader, IStorageWriter, ILogger, IPathJoiner, IPathCutter, IModelReader, IModelActorfrom typing import Callable
+from abc import ABC, abstractmethod
+
+class IStorageReader(ABC):
+    @abstractmethod
+    def get_name(self,path:str) -> str: pass
+    @abstractmethod
+    def is_dir(self, path:str) -> bool: pass
+    @abstractmethod
+    def is_file(self, path:str) -> bool: pass
+    @abstractmethod
+    def join_with_root_path(self, path:str) -> str: pass
+    @abstractmethod
+    def get_all_entitynames_in_dir(self, path: str) -> list[str]: pass
+
+class IStorageWriter(ABC):
+    @abstractmethod
+    async def async_write_from_fastapi_uploadfile_to_file(self, source_file, output_file_path:str) -> None: pass
+
+class IArchivator(ABC):
+    @abstractmethod
+    def create_large_zip(self, path: str) -> str: pass
+
+class IPathValidator(ABC):
+    @abstractmethod
+    def raise_if_path_invalid(self, path:str) -> None: pass
+    @abstractmethod
+    def raise_if_goes_beyond_limits(self, path:str) -> None: pass
+    @abstractmethod
+    def is_goes_beyond_limits(self, path:str) -> bool: pass
+    @abstractmethod
+    def is_exists(self, path:str) -> bool: pass
+
+class IPathJoiner(ABC):
+    @abstractmethod
+    def join_paths(self, path1: str, path2: str) -> str: pass
+
+class ILogger(ABC):
+    @abstractmethod
+    def log(self, exception) -> None: pass
+    @abstractmethod
+    def decor_log(self, func) -> Callable: pass
+
+class IPathCutter(ABC):
+    @abstractmethod
+    def cut_user_id_from_storage_path(self, path) -> str: pass
+
+class IModelReader(ABC):
+    @abstractmethod
+    def get_by_id(self, id: int): pass
+    @abstractmethod
+    def get_by_kwargs(self, **kwargs): pass
+
+class IModelActor(ABC):
+    @abstractmethod
+    def create_record(self, **kwargs): pass
+    @abstractmethod
+    def write_record_to_db(self, record): pass
+    @abstractmethod
+    def delete_record_by_kwargs(self, **kwargs): pass
+    @abstractmethod
+    def delete_record_by_id(self, id): passfrom .models import User, Sessionfrom sqlalchemy import Column, Integer, String, Boolean, create_engine, Date, ForeignKey
+from sqlalchemy.ext.declarative import declarative_base
+
+from config import DATABASE_URL
+
+engine = create_engine(DATABASE_URL)
+
+Base = declarative_base()
+
+
+class User(Base):
+
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    password = Column(String(255))
+    name = Column(String(30), unique=True)
+    is_admin = Column(Boolean, default=False)
+    owning_dir_id = Column(Integer, unique=True)
+
+class Session(Base):
+    __tablename__ = "sessions"
+
+    id = Column(String(50), primary_key=True)
+    user_id = Column(Integer, ForeignKey(User.id))
+    expire_date = Column(Date)
+
+Base.metadata.create_all(bind=engine)
+
+from dotenv import load_dotenv
+from os import getenv
+from exceptions import StoragePathIsNone, DatabaseUrlIsNone
+
+load_dotenv('.env')
+
+STORAGE_PATH = getenv('STORAGE_PATH')
+DATABASE_URL = getenv('DATABASE_URL')
+SESSION_MAKER_KEY = getenv('SESSION_MAKER_KEY')
+
+if STORAGE_PATH is None:
+    raise StoragePathIsNone
+if DATABASE_URL is None:
+    raise DatabaseUrlIsNone
+if SESSION_MAKER_KEY is None:
+    print('WARNING session_maker_key is None WARNING')
+
+from .view_storage import ViewStorageRootQuery, ViewStorageQuery
+from .upload import UploadQuery
+from .download import DownloadQueryfrom pydantic import BaseModel, Field
+
+class ViewStorageRootQuery(BaseModel):
+    user_id: int = Field(ge=0)
+
+class ViewStorageQuery(BaseModel):
+    user_id: int = Field(ge=0)
+from pydantic import BaseModel, Field
+
+
+class DownloadQuery(BaseModel):
+    user_id: int = Field(ge=0)
+    entity_path_in_storage: str
+from pydantic import BaseModel, Field
+
+
+class UploadQuery(BaseModel):
+    user_id: int = Field(ge=0)
+    path_in_storage: str
+
+from .storage_view import ViewStorageResponsefrom pydantic import BaseModel
+from typing import List
+
+
+class ViewStorageResponse(BaseModel):
+    entities: list[str]from fastapi import UploadFile
+from fastapi.testclient import TestClient
+
+
+from main import app
+client = TestClient(app)
+
+def test_view_root_storage():
+    url = '/storage'
+    params = {"user_id": 1}
+    response = client.get(url=url, params=params)
+    json = response.json()
+    assert response.status_code == 200
+    assert 'entities' in json
+
+def test_view_storage():
+    url = '/storage/music%2Fletov?user_id=1'
+    params = {"user_id": 1}
+    response = client.get(url=url, params=params)
+    assert  response.status_code == 200
+    assert 'entities' in response.json()
+
+def test_download_dir():
+    url = '/download-entity'
+    params = {"user_id": 1, "entity_path_in_storage": 'music/nirvana'}
+    response = client.get(url=url, params=params)
+    headers = response.headers
+    content_len = int(headers['content-length'])
+    assert response.status_code == 200
+    assert content_len > 0
+
+def test_download_file():
+    url = '/download-entity'
+    params = {"user_id": 1, "entity_path_in_storage": 'images/Desert.jpg'}
+    response = client.get(url=url, params=params)
+    headers = response.headers
+    content_len = int(headers['content-length'])
+    status_code = response.status_code
+    assert status_code == 200
+    assert content_len > 0
+
+def test_upload_entity():
+    print('not_impl')from logic import Archivator
+from config import STORAGE_PATH
+
+archiver = Archivator()
+
+def test_create_large_zip():
+    path_to_archivable = f"{STORAGE_PATH}/music"
+    zip = archiver.create_large_zip(path_to_archivable)
+    zip_name = zip.name
+    expected_zip_name = 'music.zip'
+    assert zip_name == expected_zip_name
+    archiver.cleanup_temp_files()
+
+from path_explorator import PathGoesBeyondLimits
+
+from exceptions.exc import NotAUserId
+from utils import Logger, PathCutter, PathJoiner, PathValidEnsurer
+
+from config import STORAGE_PATH
+
+logger = Logger()
+cutter = PathCutter()
+joiner = PathJoiner(STORAGE_PATH)
+ensurer = PathValidEnsurer(STORAGE_PATH)
+
+def test_cutter():
+    failure = False
+    expected_path = '/folder/file.txt'
+    tmplt = expected_path
+    paths = [f'/5{tmplt}', f'/321{tmplt}', f'/5039{tmplt}', f'/59438729{tmplt}']
+    invalid_paths = [f'/foo{tmplt}', f'/f312oo{tmplt}', f'/21foo{tmplt}', f'/foo123{tmplt}', f'/1f2f3f4o5o{tmplt}']
+    for path in paths:
+        cut_path = cutter.cut_user_id_from_storage_path(path)
+        assert cut_path == expected_path
+    for invalid_path in invalid_paths:
+        try:
+            cutter.cut_user_id_from_storage_path(invalid_path)
+            failure = True # если схавал невалидный путь и не поднял исключение
+        except NotAUserId:
+            pass
+    assert failure == False
+
+def test_joiner_join_with_root_path():
+    path_to_dir = 'very/cool/dir'
+    joined_path_to_dir = joiner.join_with_root_path(path_to_dir)
+    expected_path_to_dir = f'{STORAGE_PATH}/{path_to_dir}'
+    assert joined_path_to_dir == expected_path_to_dir
+    path_to_file = 'very/cool/dir/file.txt'
+    joined_path_to_file = joiner.join_with_root_path(path_to_file)
+    expected_path_to_file = f'{STORAGE_PATH}/{path_to_file}'
+    assert  joined_path_to_file == expected_path_to_file
+
+def test_joiner_create_absolute_path():
+    user_id_int = 1
+    user_id_str = '1'
+    path_to_dir = 'very/cool/dir'
+    abs_path_dir_int_id = joiner.create_absolute_path(user_id_int, path_to_dir)
+    abs_path_dir_str_id = joiner.create_absolute_path(user_id_str, path_to_dir)
+    expected_path_to_dir = f'{STORAGE_PATH}/{user_id_str}/{path_to_dir}'
+    assert abs_path_dir_str_id == abs_path_dir_int_id == expected_path_to_dir
+    path_to_file = 'very/cool/dir/file.txt'
+    abs_path_file_int_id = joiner.create_absolute_path(user_id_int, path_to_file)
+    abs_path_file_str_id = joiner.create_absolute_path(user_id_str, path_to_file)
+    expected_path_to_file = f'{STORAGE_PATH}/{user_id_str}/{path_to_file}'
+    assert  abs_path_file_str_id == abs_path_file_int_id == expected_path_to_file
+
+def test_ensurer_goes_beyond_limits():
+    beyond_path = '/home'
+    beyond_rel_path = f'{ensurer.root}/../../dir'
+    safe_path = f'{ensurer.root}/very/cool/dir'
+    is_unsafe = ensurer.is_goes_beyond_limits(beyond_path)
+    is_unsafe_rel = ensurer.is_goes_beyond_limits(beyond_rel_path)
+    is_safe = not ensurer.is_goes_beyond_limits(safe_path)
+    assert is_unsafe == is_unsafe_rel == is_safe == True
+from interfaces import IModelActor
+from werkzeug.security import generate_password_hash
+
+class SessionMaker:
+    def __init__(self, session_expire_time, db_access, time_handler):
+        self.expire_time = session_expire_time
+        self._access: IModelActor = db_access
+        self.time_handler = time_handler
+
+    def _get_expire_date(self):
+        return self.time_handler.add_days_to_current_date(self.expire_time)
+
+    def _create_session_obj(self, user_id, username):
+        session_id = self._create_session_id(username)
+        expire_date = self._get_expire_date()
+        session_record = self._access.create_record(id=session_id, expire_date=expire_date, user_id=user_id)
+        return session_record
+
+    def _create_session_id(self, username):
+        length = 10
+        hash_start_id = 17 #до этих символов идёт одинаковый текст по типу encrypt:4231:8:1$ причем цифры одинаковые всегда
+        hash_end_id = 67 #использовать лишь часть хэша вместо всего будет экономнее
+        hashed_id = generate_password_hash(username, salt_length=length)
+        return hashed_id[hash_start_id:hash_end_id] #итого длина хэша на выходе 50 символов
+
+    def create_session_and_ret_id(self, user_id, username):
+        session = self._create_session_obj(user_id, username)
+        self._access.write_record_to_db(session)
+        return session.idfrom .reader import ModelReader
+from .actor import ModelActorfrom .parent_access import ParentAccess
+
+class ModelReader(ParentAccess):
+    def __init__(self, model, logger):
+        super().__init__(model, logger)
+
+    def get_by_id(self, id):
+        session = self.session()
+        try:
+            return session.query(self.model).filter_by(id=id).first()
+        except Exception as e:
+            self.logger.log(e)
+        finally:
+            session.close()
+
+    def get_by_kwargs(self, **kwargs):
+        session = self.session()
+        try:
+             return session.query(self.model).filter_by(**kwargs).first()
+        except Exception as e:
+            self.logger.log(e)
+        finally:
+            session.close()from .parent_access import ParentAccess
+
+class ModelActor(ParentAccess):
+    def __init__(self, model, logger):
+        super().__init__(model, logger)
+
+    def write_record_to_db(self, record):
+        session = self.session()
+        try:
+            session.add(record)
+            session.commit()
+        except Exception as e:
+            self.logger.log(e)
+            session.rollback()
+        finally:
+            session.close()
+
+    def create_record(self, **kwargs):
+        try:
+            return self.model(**kwargs)
+        except Exception as e:
+            self.logger.log(e)
+
+    def delete_record_by_id(self, id):
+        session = self.session()
+        try:
+            session.query(self.model).filter_by(id=id).delete()
+            session.commit()
+        except Exception as e:
+            self.logger.log(e)
+            session.rollback()
+        finally:
+            session.close()
+
+    def delete_record_by_kwargs(self, **kwargs):
+        session = self.session()
+        try:
+            session.query(self.model).filter_by(**kwargs).delete()
+            session.commit()
+        except Exception as e:
+            self.logger.log(e)
+            session.rollback()
+        finally:
+            session.close()from sqlalchemy.orm import sessionmaker
+from alchemy.models import engine
+
+class ParentAccess:
+    def __init__(self, model, logger):
+        self.session = sessionmaker(engine)
+        self.model = model
+        self.logger = loggerfrom fastapi import FastAPI, UploadFile, BackgroundTasks, Query, Depends
+from fastapi.security import OAuth2PasswordBearer
+
+from typing import Annotated
+
+from logic import StorageReader, StorageWriter, Archivator
+from utils import PathValidEnsurer, Logger, PathJoiner, PathCutter
+from view_handlers import FileResponseHandler, UploadFileHandler, StorageViewHandler
+from config import STORAGE_PATH
+from schemas.query import ViewStorageQuery, ViewStorageRootQuery, UploadQuery, DownloadQuery
+from schemas.response import ViewStorageResponse
+
+#TODO refactor alchemy package, refactor db_repository
+
+app = FastAPI()
+logger = Logger()
+path_ensurer = PathValidEnsurer(STORAGE_PATH)
+storage_reader = StorageReader(STORAGE_PATH)
+storage_writer = StorageWriter(STORAGE_PATH)
+path_joiner = PathJoiner(STORAGE_PATH)
+path_cutter = PathCutter()
+archivator = Archivator()
+file_response_handler = FileResponseHandler(archivator, storage_reader, logger, path_ensurer)
+upload_handler = UploadFileHandler(storage_writer, path_ensurer, logger)
+storage_view_handler = StorageViewHandler(storage_reader, logger, path_joiner, path_cutter)
+
+token_schema = OAuth2PasswordBearer(tokenUrl='token_url')
+
+@app.get('/storage', response_model=ViewStorageResponse)
+def view_storage_root(token: Annotated[str, Depends(token_schema)], params: ViewStorageRootQuery = Query()):
+    abs_path = path_joiner.join_with_root_path(params.user_id)
+    path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, params.user_id)
+    entities = storage_view_handler.get_list_of_entities(abs_path)
+    return {"entities": entities}
+
+
+@app.get('/storage/{entity_path_in_storage:path}', response_model=ViewStorageResponse)
+async def view_storage(token: Annotated[str, Depends(token_schema)], entity_path_in_storage: str, params: ViewStorageQuery = Query()):
+    abs_path = path_joiner.create_absolute_path(params.user_id, entity_path_in_storage)
+    path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, entity_path_in_storage)
+    entities = storage_view_handler.get_list_of_entities(abs_path)
+    return {"entities": entities}
+
+@app.get('/download-entity')
+def download_entity_endpoint(token: Annotated[str, Depends(token_schema)], background_tasks: BackgroundTasks, params: DownloadQuery = Query()):
+    abs_path = path_joiner.create_absolute_path(params.user_id, params.entity_path_in_storage)
+    path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, params.entity_path_in_storage)
+    response = file_response_handler.get_response(abs_path, params.entity_path_in_storage)
+    background_tasks.add_task(archivator.cleanup_temp_files)
+    return response
+
+
+@app.post('/upload-entity')
+async def upload_entity_endpoint(token: Annotated[str, Depends(token_schema)], files: list[UploadFile], params: UploadQuery = Query()):
+    abs_path = path_joiner.create_absolute_path(params.user_id, params.path_in_storage)
+    path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, params.path_in_storage)
+    await upload_handler.save_files_to_storage(abs_path, files)

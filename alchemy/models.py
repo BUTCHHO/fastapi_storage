@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, create_engine
+from sqlalchemy import Column, Integer, String, Boolean, create_engine, Date, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 
 from config import DATABASE_URL
@@ -17,6 +17,13 @@ class User(Base):
     name = Column(String(30), unique=True)
     is_admin = Column(Boolean, default=False)
     owning_dir_id = Column(Integer, unique=True)
+
+class Session(Base):
+    __tablename__ = "sessions"
+
+    id = Column(String(50), primary_key=True)
+    user_id = Column(Integer, ForeignKey(User.id))
+    expire_date = Column(Date)
 
 Base.metadata.create_all(bind=engine)
 

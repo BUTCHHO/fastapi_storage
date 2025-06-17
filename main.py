@@ -1,6 +1,10 @@
-from fastapi import FastAPI, UploadFile, BackgroundTasks, Query
+from fastapi import FastAPI, UploadFile, BackgroundTasks, Query, Depends
+from fastapi.security import OAuth2PasswordBearer
+
+from typing import Annotated
+
 from logic import StorageReader, StorageWriter, Archivator
-from utils import PathValidEnsurer, Logger, PathJoiner, PathCutter
+from utils import PathValidEnsurer, Logger, PathJoiner, PathCutter, TimeHandler
 from view_handlers import FileResponseHandler, UploadFileHandler, StorageViewHandler
 from config import STORAGE_PATH
 from schemas.query import ViewStorageQuery, ViewStorageRootQuery, UploadQuery, DownloadQuery
@@ -20,8 +24,11 @@ file_response_handler = FileResponseHandler(archivator, storage_reader, logger, 
 upload_handler = UploadFileHandler(storage_writer, path_ensurer, logger)
 storage_view_handler = StorageViewHandler(storage_reader, logger, path_joiner, path_cutter)
 
+token_schema = OAuth2PasswordBearer(tokenUrl='token_url')
+
+
 @app.get('/storage', response_model=ViewStorageResponse)
-def view_storage_root(params: ViewStorageRootQuery = Query()):
+def view_storage_root(token: Annotated[str, Depends(token_schema)], params: ViewStorageRootQuery = Query()):
     abs_path = path_joiner.join_with_root_path(params.user_id)
     path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, params.user_id)
     entities = storage_view_handler.get_list_of_entities(abs_path)
@@ -29,14 +36,14 @@ def view_storage_root(params: ViewStorageRootQuery = Query()):
 
 
 @app.get('/storage/{entity_path_in_storage:path}', response_model=ViewStorageResponse)
-async def view_storage(entity_path_in_storage: str, params: ViewStorageQuery = Query()):
+async def view_storage(token: Annotated[str, Depends(token_schema)], entity_path_in_storage: str, params: ViewStorageQuery = Query()):
     abs_path = path_joiner.create_absolute_path(params.user_id, entity_path_in_storage)
     path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, entity_path_in_storage)
     entities = storage_view_handler.get_list_of_entities(abs_path)
     return {"entities": entities}
 
 @app.get('/download-entity')
-def download_entity_endpoint(background_tasks: BackgroundTasks, params: DownloadQuery = Query()):
+def download_entity_endpoint(token: Annotated[str, Depends(token_schema)], background_tasks: BackgroundTasks, params: DownloadQuery = Query()):
     abs_path = path_joiner.create_absolute_path(params.user_id, params.entity_path_in_storage)
     path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, params.entity_path_in_storage)
     response = file_response_handler.get_response(abs_path, params.entity_path_in_storage)
@@ -45,7 +52,7 @@ def download_entity_endpoint(background_tasks: BackgroundTasks, params: Download
 
 
 @app.post('/upload-entity')
-async def upload_entity_endpoint(files: list[UploadFile], params: UploadQuery = Query()):
+async def upload_entity_endpoint(token: Annotated[str, Depends(token_schema)], files: list[UploadFile], params: UploadQuery = Query()):
     abs_path = path_joiner.create_absolute_path(params.user_id, params.path_in_storage)
     path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, params.path_in_storage)
     await upload_handler.save_files_to_storage(abs_path, files)

@@ -44,3 +44,19 @@ class ILogger(ABC):
 class IPathCutter(ABC):
     @abstractmethod
     def cut_user_id_from_storage_path(self, path) -> str: pass
+
+class IModelReader(ABC):
+    @abstractmethod
+    def get_by_id(self, id: int): pass
+    @abstractmethod
+    def get_by_kwargs(self, **kwargs): pass
+
+class IModelActor(ABC):
+    @abstractmethod
+    def create_record(self, **kwargs): pass
+    @abstractmethod
+    def write_record_to_db(self, record): pass
+    @abstractmethod
+    def delete_record_by_kwargs(self, **kwargs): pass
+    @abstractmethod
+    def delete_record_by_id(self, id): pass
