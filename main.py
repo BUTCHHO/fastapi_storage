@@ -1,14 +1,16 @@
-from fastapi import FastAPI, UploadFile, BackgroundTasks, Query, Depends
-from fastapi.security import OAuth2PasswordBearer
+from fastapi import FastAPI, UploadFile, BackgroundTasks, Query
 
-from typing import Annotated
-
+from alchemy import Session, User
 from logic import StorageReader, StorageWriter, Archivator
-from utils import PathValidEnsurer, Logger, PathJoiner, PathCutter, TimeHandler
-from view_handlers import FileResponseHandler, UploadFileHandler, StorageViewHandler
+from utils import PathValidEnsurer, Logger, PathJoiner, PathCutter, TimeHandler, Hasher
+from view_handlers import FileResponseHandler, UploadFileHandler, StorageViewHandler, SignUpHandler
 from config import STORAGE_PATH
-from schemas.query import ViewStorageQuery, ViewStorageRootQuery, UploadQuery, DownloadQuery
+from schemas.query import ViewStorageQuery, ViewStorageRootQuery, UploadQuery, DownloadQuery, SignUpQuery, LogInQuery
 from schemas.response import ViewStorageResponse
+
+from db_repository import ModelReader, ModelActor
+
+from auth import UserRegistration
 
 #TODO refactor alchemy package, refactor db_repository
 
@@ -20,9 +22,30 @@ storage_writer = StorageWriter(STORAGE_PATH)
 path_joiner = PathJoiner(STORAGE_PATH)
 path_cutter = PathCutter()
 archivator = Archivator()
+hasher = Hasher()
+
+user_reader = ModelReader(User, logger)
+user_actor = ModelActor(User, logger)
+session_reader = ModelReader(Session, logger)
+session_actor = ModelActor(Session, logger)
+
+user_registrator = UserRegistration(user_reader, user_actor, hasher, logger)
+
 file_response_handler = FileResponseHandler(archivator, storage_reader, logger, path_ensurer)
 upload_handler = UploadFileHandler(storage_writer, path_ensurer, logger)
 storage_view_handler = StorageViewHandler(storage_reader, logger, path_joiner, path_cutter)
+sign_up_handler = SignUpHandler(user_registrator)
+
+@app.post('/sign-up')
+def sign_up_endpoint(params: SignUpQuery = Query()):
+    sign_up_handler.sign_up(params)
+
+@app.post('/log-in')
+def log_in(params: LogInQuery = Query()):
+    #TODO auth system
+
+    return {'message': 'not implemented endpoint'}
+
 
 
 @app.get('/storage', response_model=ViewStorageResponse)

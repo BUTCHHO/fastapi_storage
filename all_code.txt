@@ -51,7 +51,8 @@ from .path_creator import PathJoiner
 from .logger import Logger
 from .text_encoding import get_encoded_string
 from .path_cutter import PathCutter
-from .time_handler import TimeHandlerfrom exceptions import APIPathGoesBeyondLimits
+from .time_handler import TimeHandler
+from .hasher import Hasherfrom exceptions import APIPathGoesBeyondLimits
 from path_explorator import PathGoesBeyondLimits, EntityDoesNotExists, PathValidator
 
 
@@ -151,29 +152,23 @@ class TimeHandler:
         return datetime.today()
 
     def get_str_today_date(self):
-        return self.get_today_date().strftime('%d/%m/%Y')from .http_exc import APIPathGoesBeyondLimits, APIEntityDoesNotExists, APIUnsupportedEntityType
+        return self.get_today_date().strftime('%d/%m/%Y')from werkzeug.security import generate_password_hash, check_password_hash
+
+
+class Hasher:
+
+    def generate_psw_hash(self, password):
+        return generate_password_hash(password)
+
+    def compare_psw_with_hash(self, password, hashed_psw):
+        return check_password_hash(hashed_psw, password)
+
+    def create_session_id_hash(self):
+        raise NotImplemented
+from .path_http_exc import APIPathGoesBeyondLimits, APIEntityDoesNotExists, APIUnsupportedEntityType
 from .exc import StoragePathIsNone, NotAUserId, DatabaseUrlIsNone
-from .auth import UserAlreadyExists, UserDontExists, IncorrectPassword, SessionExpiredfrom fastapi import HTTPException
-
-class APIPathGoesBeyondLimits(HTTPException):
-    def __init__(self, path_in_storage, detail=None, status_code=403):
-        if not detail:
-            detail = {"message": f'path {path_in_storage} is goes beyond limits', "code": 'path_goes_beyond_limits'}
-        super().__init__(status_code=status_code, detail=detail)
-
-class APIEntityDoesNotExists(HTTPException):
-    def __init__(self, path_in_storage, detail=None, status_code=404):
-        if not detail:
-            detail = {"message": f'entity at {path_in_storage} does not exists', "code": 'entity_does_not_exists'}
-        super().__init__(status_code=status_code, detail=detail)
-
-class APIUnsupportedEntityType(HTTPException):
-    def __init__(self, entity_path_in_storage, detail=None, status_code=415):
-        if not detail:
-            detail = {"message":f'unsupported entity type {entity_path_in_storage}', "code":'unsupported_entity_type'}
-        super().__init__(status_code, detail)
-
-class StoragePathIsNone(Exception):
+from .auth import UserAlreadyExists, UserDontExists, IncorrectPassword, SessionExpired
+from .auth_http_exc import APIUserAlreadyExistsclass StoragePathIsNone(Exception):
     def __init__(self):
         msg = 'STORAGE_PATH value from .env file is None. Must be filled'
         super().__init__(msg)
@@ -202,9 +197,37 @@ class IncorrectPassword(Exception):
 
 class SessionExpired(Exception):
     def __init__(self):
-        super().__init__()from .file_response_handler import FileResponseHandler
+        super().__init__()from fastapi import HTTPException
+
+class APIPathGoesBeyondLimits(HTTPException):
+    def __init__(self, path_in_storage, detail=None, status_code=403):
+        if not detail:
+            detail = {"message": f'path {path_in_storage} is goes beyond limits', "code": 'path_goes_beyond_limits'}
+        super().__init__(status_code=status_code, detail=detail)
+
+class APIEntityDoesNotExists(HTTPException):
+    def __init__(self, path_in_storage, detail=None, status_code=404):
+        if not detail:
+            detail = {"message": f'entity at {path_in_storage} does not exists', "code": 'entity_does_not_exists'}
+        super().__init__(status_code=status_code, detail=detail)
+
+class APIUnsupportedEntityType(HTTPException):
+    def __init__(self, entity_path_in_storage, detail=None, status_code=415):
+        if not detail:
+            detail = {"message":f'unsupported entity type {entity_path_in_storage}', "code":'unsupported_entity_type'}
+        super().__init__(status_code, detail)
+
+from fastapi.exceptions import HTTPException
+
+
+class APIUserAlreadyExists(HTTPException):
+    def __init__(self, name, detail=None, status_code=409):
+        if not detail:
+            detail = {"message": f'User with name {name} already exists', "code": 'user_already_exists'}
+        super().__init__(status_code, detail)from .file_response_handler import FileResponseHandler
 from .upload_handler import UploadFileHandler
-from .storage_view_handler import StorageViewHandlerfrom fastapi.responses import FileResponse
+from .storage_view_handler import StorageViewHandler
+from .sign_up_handler import SignUpHandlerfrom fastapi.responses import FileResponse
 from fastapi import HTTPException
 from interfaces import IStorageReader, IArchivator, ILogger, IPathValidator
 from exceptions import APIPathGoesBeyondLimits, APIEntityDoesNotExists, APIUnsupportedEntityType
@@ -312,7 +335,18 @@ class StorageViewHandler:
             entitynames = self._get_all_entitynames_in_dir(abs_path)
             return entitynames
         except Exception as e:
-            self.logger.log(e)from .interfaces import IArchivator, IPathValidator, IStorageReader, IStorageWriter, ILogger, IPathJoiner, IPathCutter, IModelReader, IModelActor, ITimeHandlerfrom typing import Callable
+            self.logger.log(e)from exceptions import APIUserAlreadyExists, UserAlreadyExists
+
+
+class SignUpHandler:
+    def __init__(self, user_registrator):
+        self.user_registrator = user_registrator
+
+    def sign_up(self, params):
+        try:
+            self.user_registrator.create_user(params.name, params.password)
+        except UserAlreadyExists:
+            raise APIUserAlreadyExists(params.name)from .interfaces import IArchivator, IPathValidator, IStorageReader, IStorageWriter, ILogger, IPathJoiner, IPathCutter, IModelReader, IModelActor, ITimeHandlerfrom typing import Callable
 from abc import ABC, abstractmethod
 
 class IStorageReader(ABC):
@@ -436,7 +470,8 @@ if SESSION_MAKER_KEY is None:
 
 from .view_storage import ViewStorageRootQuery, ViewStorageQuery
 from .upload import UploadQuery
-from .download import DownloadQueryfrom pydantic import BaseModel, Field
+from .download import DownloadQuery
+from .auth import SignUpQueryfrom pydantic import BaseModel, Field
 
 class ViewStorageRootQuery(BaseModel):
     user_id: int = Field(ge=0)
@@ -456,6 +491,12 @@ class UploadQuery(BaseModel):
     user_id: int = Field(ge=0)
     path_in_storage: str
 
+from pydantic import BaseModel, Field
+
+
+class SignUpQuery(BaseModel):
+    name: str = Field(max_length=16, min_length=1)
+    password: str = Field(max_length=255)
 from .storage_view import ViewStorageResponsefrom pydantic import BaseModel
 from typing import List
 
@@ -577,20 +618,23 @@ def test_ensurer_goes_beyond_limits():
     is_unsafe_rel = ensurer.is_goes_beyond_limits(beyond_rel_path)
     is_safe = not ensurer.is_goes_beyond_limits(safe_path)
     assert is_unsafe == is_unsafe_rel == is_safe == True
-from .session_maker import SessionMakerfrom exceptions import UserAlreadyExists
+from .session_maker import SessionMaker
+from .registration import UserRegistration
+from .session_validator import SessionValidator
+from .authentication import UserAuthenticationfrom exceptions import UserAlreadyExists
 from psycopg2.errors import UniqueViolation
 
 class UserRegistration:
-    def __init__(self, db_reader, db_actor, hash_func, logger):
+    def __init__(self, db_reader, db_actor, hasher, logger):
         self._reader = db_reader
         self._actor = db_actor
-        self.hash_func = hash_func
+        self.hasher = hasher
         self.logger = logger
 
     def create_user(self, name, password):
         try:
-            password = self.hash_func(password)
-            self._actor.create_amd_write_record_to_db(name, password)
+            password = self.hasher.generate_hash(password)
+            self._actor.create_and_write_record_to_db(name, password)
         except UniqueViolation:
             raise UserAlreadyExists(name)
         except Exception as e:
@@ -779,17 +823,19 @@ class ParentAccess:
     def __init__(self, model, logger):
         self.session = sessionmaker(engine)
         self.model = model
-        self.logger = loggerfrom fastapi import FastAPI, UploadFile, BackgroundTasks, Query, Depends
-from fastapi.security import OAuth2PasswordBearer
+        self.logger = loggerfrom fastapi import FastAPI, UploadFile, BackgroundTasks, Query
 
-from typing import Annotated
-
+from alchemy import Session, User
 from logic import StorageReader, StorageWriter, Archivator
-from utils import PathValidEnsurer, Logger, PathJoiner, PathCutter, TimeHandler
-from view_handlers import FileResponseHandler, UploadFileHandler, StorageViewHandler
+from utils import PathValidEnsurer, Logger, PathJoiner, PathCutter, TimeHandler, Hasher
+from view_handlers import FileResponseHandler, UploadFileHandler, StorageViewHandler, SignUpHandler
 from config import STORAGE_PATH
-from schemas.query import ViewStorageQuery, ViewStorageRootQuery, UploadQuery, DownloadQuery
+from schemas.query import ViewStorageQuery, ViewStorageRootQuery, UploadQuery, DownloadQuery, SignUpQuery
 from schemas.response import ViewStorageResponse
+
+from db_repository import ModelReader, ModelActor
+
+from auth import UserRegistration
 
 #TODO refactor alchemy package, refactor db_repository
 
@@ -801,9 +847,24 @@ storage_writer = StorageWriter(STORAGE_PATH)
 path_joiner = PathJoiner(STORAGE_PATH)
 path_cutter = PathCutter()
 archivator = Archivator()
+hasher = Hasher()
+
+user_reader = ModelReader(User, logger)
+user_actor = ModelActor(User, logger)
+session_reader = ModelReader(Session, logger)
+session_actor = ModelActor(Session, logger)
+
+user_registrator = UserRegistration(user_reader, user_actor, hasher, logger)
+
 file_response_handler = FileResponseHandler(archivator, storage_reader, logger, path_ensurer)
 upload_handler = UploadFileHandler(storage_writer, path_ensurer, logger)
 storage_view_handler = StorageViewHandler(storage_reader, logger, path_joiner, path_cutter)
+sign_up_handler = SignUpHandler(user_registrator)
+
+@app.post('/sign-up')
+def sign_up_endpoint(params: SignUpQuery = Query()):
+    sign_up_handler.sign_up(params)
+
 
 
 @app.get('/storage', response_model=ViewStorageResponse)

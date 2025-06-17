@@ -1,11 +1,12 @@
 class Logger:
 
-    @staticmethod
-    def log(exception):
-        print(f'LOG {exception}')
+    def __init__(self):
+        self.red_log = "\033[1;31mLOG\033[0m"
 
-    @staticmethod
-    def decor_log(func):
+    def log(self, exception):
+        print(f'{self.red_log}{exception}{self.red_log}')
+
+    def decor_log(self, func):
         def wrapper(*args, **kwargs):
             try:
                 result = func(*args, **kwargs)
