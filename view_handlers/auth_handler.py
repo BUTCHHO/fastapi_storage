@@ -1,21 +1,32 @@
-from fastapi import Cookie
+from fastapi import Response
 
-from exceptions import IncorrectPassword, UserDontExists
+from exceptions import APIIncorrectPassword, APIUserDontExists, IncorrectPassword, UserDontExists, APIUnauthorized, APISessionDontExists, APISessionExpired, SessionExpired, SessionDontExists
+from config import SESSION_COOKIES_EXPIRE_TIME
 
-
-class UserAuthenticateHandler:
-    def __init__(self, user_getter, session_validator, session_maker, cache_handler, authenticator):
-        self.user_getter = user_getter
-        self.session_validator = session_validator
-        self.session_cacher = cache_handler
-        self.session_maker = session_maker
+class AuthHandler:
+    def __init__(self, authenticator):
         self.authenticator = authenticator
 
-    def auth_and_ret_session_cookie(self, name, password):
+    def set_session_id_cookie(self, session_id, response: Response):
+        response.set_cookie(key="session_id", value=session_id, max_age=SESSION_COOKIES_EXPIRE_TIME,
+                            samesite='lax', httponly=True)
+
+    def auth_with_psw_and_set_session_cookie(self, name, password, response: Response):
         try:
-            session_id = self.authenticator.authenticate_and_return_session_id(name, password)
+            session_id = self.authenticator.make_session_by_name_and_psw(name, password)
+            self.set_session_id_cookie(session_id, response)
         except IncorrectPassword:
-            raise APIInorrectPassword
+            raise APIIncorrectPassword(password)
         except UserDontExists:
-            raise APIUserDontExists
+            raise APIUserDontExists(name)
+
+    def auth_with_session_id(self, session_id):
+        try:
+            if session_id is None:
+                raise APIUnauthorized
+            return self.authenticator.get_user_by_session_id(session_id)
+        except SessionExpired:
+            raise APISessionExpired
+        except SessionDontExists:
+            raise APISessionDontExists
 

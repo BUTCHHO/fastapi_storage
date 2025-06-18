@@ -1,12 +1,12 @@
-from fastapi import FastAPI, UploadFile, BackgroundTasks, Query
+from fastapi import FastAPI, UploadFile, BackgroundTasks, Query, Response, Request, Depends
 from pymemcache.client.base import Client
 
 from alchemy import Session, User
 from logic import StorageReader, StorageWriter, Archivator
 from utils import PathValidEnsurer, Logger, PathJoiner, PathCutter, TimeHandler, Hasher
-from view_handlers import FileResponseHandler, UploadFileHandler, StorageViewHandler, SignUpHandler
+from view_handlers import FileResponseHandler, UploadFileHandler, StorageViewHandler, SignUpHandler, AuthHandler
 from config import STORAGE_PATH, MEMCACHE_PORT, MEMCACHE_HOST, MEMCACHE_EXPIRE_TIME, SESSION_EXPIRE_TIME, SESSION_COOKIES_EXPIRE_TIME
-from schemas.query import ViewStorageQuery, ViewStorageRootQuery, UploadQuery, DownloadQuery, SignUpQuery, AuthenticateQuery
+from schemas.query import UploadQuery, DownloadQuery, SignUpQuery, AuthenticateQuery
 from schemas.response import ViewStorageResponse
 from cache_handler import MemCacher
 from db_repository import ModelReader, ModelActor
@@ -25,52 +25,55 @@ path_cutter = PathCutter()
 archivator = Archivator()
 time_handler = TimeHandler()
 hasher = Hasher()
-cacher = MemCacher(memcache_client, MEMCACHE_EXPIRE_TIME)
+cacher = MemCacher(memcache_client, int(MEMCACHE_EXPIRE_TIME))
 user_reader = ModelReader(User, logger)
 user_actor = ModelActor(User, logger)
 session_reader = ModelReader(Session, logger)
 session_actor = ModelActor(Session, logger)
 session_validator = SessionValidator(time_handler)
-session_maker = SessionMaker(SESSION_EXPIRE_TIME, session_reader, time_handler, hasher, cacher)
-session_getter = UserGetter(session_reader, cacher, time_handler)
+session_maker = SessionMaker(int(SESSION_EXPIRE_TIME), session_actor, time_handler, hasher, cacher)
+user_getter = UserGetter(user_reader, session_reader, cacher, session_validator)
 user_registrator = UserRegistration(user_reader, user_actor, hasher, logger)
-user_authenticator = UserAuthentication(user_reader, session_validator, session_maker, session_getter, logger, hasher)
+user_authenticator = UserAuthentication(user_reader, session_maker, user_getter, logger, hasher)
 file_response_handler = FileResponseHandler(archivator, storage_reader, logger, path_ensurer)
 upload_handler = UploadFileHandler(storage_writer, path_ensurer, logger)
 storage_view_handler = StorageViewHandler(storage_reader, logger, path_joiner, path_cutter)
 sign_up_handler = SignUpHandler(user_registrator)
-# authenticate_handler = AuthenticateHandler()
+auth_handler = AuthHandler(user_authenticator)
+
+
+def auth_depend(request: Request):
+    return auth_handler.auth_with_session_id(request.cookies.get('session_id'))
+
 
 @app.post('/sign-up')
 def sign_up_endpoint(params: SignUpQuery = Query()):
     sign_up_handler.sign_up(params)
 
-@app.post('/authenticate')
-def authenticate(params: AuthenticateQuery = Query()):
-    #TODO auth system
-
-    return {'message': 'not implemented endpoint'}
-
+@app.post('/log-in')
+def authenticate(response: Response, params: AuthenticateQuery = Query()):
+    auth_handler.auth_with_psw_and_set_session_cookie(params.name, params.password, response)
+    return {"message": 'successfully logged_in'}
 
 
 @app.get('/storage', response_model=ViewStorageResponse)
-def view_storage_root(params: ViewStorageRootQuery = Query()):
-    abs_path = path_joiner.join_with_root_path(params.user_id)
-    path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, params.user_id)
+def view_storage_root(user=Depends(auth_depend)):
+    abs_path = path_joiner.join_with_root_path(user.id)
+    path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, user.id)
     entities = storage_view_handler.get_list_of_entities(abs_path)
     return {"entities": entities}
 
 
 @app.get('/storage/{entity_path_in_storage:path}', response_model=ViewStorageResponse)
-async def view_storage(entity_path_in_storage: str, params: ViewStorageQuery = Query()):
-    abs_path = path_joiner.create_absolute_path(params.user_id, entity_path_in_storage)
+async def view_storage(entity_path_in_storage: str, user=Depends(auth_depend)):
+    abs_path = path_joiner.create_absolute_path(user.id, entity_path_in_storage)
     path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, entity_path_in_storage)
     entities = storage_view_handler.get_list_of_entities(abs_path)
     return {"entities": entities}
 
 @app.get('/download-entity')
-def download_entity_endpoint(background_tasks: BackgroundTasks, params: DownloadQuery = Query()):
-    abs_path = path_joiner.create_absolute_path(params.user_id, params.entity_path_in_storage)
+def download_entity_endpoint(background_tasks: BackgroundTasks, params: DownloadQuery = Query(), user=Depends(auth_depend)):
+    abs_path = path_joiner.create_absolute_path(user.id, params.entity_path_in_storage)
     path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, params.entity_path_in_storage)
     response = file_response_handler.get_response(abs_path, params.entity_path_in_storage)
     background_tasks.add_task(archivator.cleanup_temp_files)
@@ -78,8 +81,8 @@ def download_entity_endpoint(background_tasks: BackgroundTasks, params: Download
 
 
 @app.post('/upload-entity')
-async def upload_entity_endpoint(files: list[UploadFile], params: UploadQuery = Query()):
-    abs_path = path_joiner.create_absolute_path(params.user_id, params.path_in_storage)
+async def upload_entity_endpoint(files: list[UploadFile], params: UploadQuery = Query(), user=Depends(auth_depend)):
+    abs_path = path_joiner.create_absolute_path(user.id, params.path_in_storage)
     path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, params.path_in_storage)
     await upload_handler.save_files_to_storage(abs_path, files)
 

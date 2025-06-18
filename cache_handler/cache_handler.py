@@ -1,6 +1,6 @@
 class MemCacher:
-    def __init__(self, client, data_expire_time):
-        self.client = client
+    def __init__(self, memcache_client, data_expire_time):
+        self.client = memcache_client
         self.expire_time = data_expire_time
 
     def get_data(self, key):

@@ -8,7 +8,7 @@ class TimeHandler:
         return new_date
 
     def is_date_future(self, date):
-        return datetime.today() < date
+        return datetime.now().date() < date
 
     def get_today_date(self):
         return datetime.today()
