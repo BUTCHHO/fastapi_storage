@@ -15,3 +15,7 @@ class IncorrectPassword(Exception):
 class SessionExpired(Exception):
     def __init__(self):
         super().__init__()
+
+class SessionDontExists(Exception):
+    def __init__(self):
+        super().__init__()
