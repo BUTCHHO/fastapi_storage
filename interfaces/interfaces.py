@@ -16,6 +16,10 @@ class IStorageReader(ABC):
 class IStorageWriter(ABC):
     @abstractmethod
     async def async_write_from_fastapi_uploadfile_to_file(self, source_file, output_file_path:str) -> None: pass
+    @abstractmethod
+    def create_dir(self, path: str, name: str, exist_ok=True): pass
+    @abstractmethod
+    def create_file(self, path: str, name: str, exist_ok=True): pass
 
 class IArchivator(ABC):
     @abstractmethod

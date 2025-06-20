@@ -119,6 +119,8 @@ class PathJoiner(PathCreator):
         return self.join_paths(self.root_path, path)
 
     def create_absolute_path(self, user_id, entity_path_in_storage):
+        if entity_path_in_storage == None:
+            entity_path_in_storage = ''
         user_id = str(user_id)
         path_in_storage_with_id = self.join_paths(user_id, entity_path_in_storage)
         return self.join_with_root_path(path_in_storage_with_id)from exceptions import NotAUserId
@@ -166,11 +168,11 @@ class Hasher:
 
     def create_session_id_hash(self):
         return token_urlsafe(32)
-from .path_http_exc import APIPathGoesBeyondLimits, APIEntityDoesNotExists, APIUnsupportedEntityType
+from .path_http_exc import APIPathGoesBeyondLimits, APIUserStorageAlreadyExists, APIEntityDoesNotExists, APIUnsupportedEntityType
 from .exc import NotAUserId
 from .auth import UserAlreadyExists, UserDontExists, IncorrectPassword, SessionExpired, SessionDontExists
 from .auth_http_exc import APIUserAlreadyExists, APIUserDontExists, APIIncorrectPassword, APISessionDontExists, APISessionExpired, APIUnauthorized
-from .config_exc import StoragePathIsNone, DatabaseUrlIsNone, MemCacheHostIsNone, MemCachePortIsNone, MemCacheExpireTimeIsNone, SessionMakerKeyIsNoneclass NotAUserId(Exception):
+from .config_exc import StoragePathIsNone, DatabaseUrlIsNone, CacheHostIsNone, CachePortIsNone, CacheExpireTimeIsNone, SessionMakerKeyIsNoneclass NotAUserId(Exception):
     def __init__(self, path:str):
         msg = f'path {path} dont starts with user_id. Must look like \'1/folder/file.txt\''
         super().__init__(msg)class UserAlreadyExists(Exception):
@@ -211,6 +213,12 @@ class APIUnsupportedEntityType(HTTPException):
     def __init__(self, entity_path_in_storage, detail=None, status_code=415):
         if not detail:
             detail = {"message":f'unsupported entity type {entity_path_in_storage}', "code":'unsupported_entity_type'}
+        super().__init__(status_code, detail)
+
+class APIUserStorageAlreadyExists(HTTPException):
+    def __init__(self):
+        status_code=409
+        detail = {"message": 'Storage for this user already exists. Failed to create new storage', "code": 'user_storage_already_exists'}
         super().__init__(status_code, detail)
 
 from fastapi.exceptions import HTTPException
@@ -260,19 +268,19 @@ class DatabaseUrlIsNone(Exception):
         msg = 'DATABASE_URL value from .env file is None. Must be filled'
         super().__init__(msg)
 
-class MemCachePortIsNone(Exception):
+class CachePortIsNone(Exception):
     def __init__(self):
-        msg = 'MEMCACHE_PORT value from .env file is None. Must be filled'
+        msg = 'CACHE_PORT value from .env file is None. Must be filled'
         super().__init__(msg)
 
-class MemCacheHostIsNone(Exception):
+class CacheHostIsNone(Exception):
     def __init__(self):
-        msg = 'MEMCACHE_HOST value from .env file is None. Must be filled'
+        msg = 'CACHE_HOST value from .env file is None. Must be filled'
         super().__init__(msg)
 
-class MemCacheExpireTimeIsNone(Exception):
+class CacheExpireTimeIsNone(Exception):
     def __init__(self):
-        msg = 'MEMCACHE_VALUE_EXPIRE_TIME value from .env file is None. Must be filled'
+        msg = 'CACHE_EXPIRE_TIME value from .env file is None. Must be filled'
         super().__init__(msg)
 
 class SessionMakerKeyIsNone(Exception):
@@ -390,18 +398,29 @@ class StorageViewHandler:
             entitynames = self._get_all_entitynames_in_dir(abs_path)
             return entitynames
         except Exception as e:
-            self.logger.log(e)from exceptions import APIUserAlreadyExists, UserAlreadyExists
-
+            self.logger.log(e)from exceptions import APIUserAlreadyExists, UserAlreadyExists, APIUserStorageAlreadyExists
+from interfaces import IStorageWriter
 
 class SignUpHandler:
-    def __init__(self, user_registrator):
+    def __init__(self, user_registrator, storage_writer, user_reader):
         self.user_registrator = user_registrator
+        self.storage_writer: IStorageWriter = storage_writer
+        self.user_reader = user_reader
+
 
     def sign_up(self, params):
         try:
             self.user_registrator.create_user(params.name, params.password)
+            user = self.user_reader.get_by_kwargs(name = params.name)
+            self.create_user_dir(user.id)
         except UserAlreadyExists:
-            raise APIUserAlreadyExists(params.name)from fastapi import Response
+            raise APIUserAlreadyExists(params.name)
+
+    def create_user_dir(self, user_id):
+        try:
+            self.storage_writer.create_dir('', str(user_id), exist_ok=False)
+        except FileExistsError:
+            raise APIUserStorageAlreadyExistsfrom fastapi import Response
 
 from exceptions import APIIncorrectPassword, APIUserDontExists, IncorrectPassword, UserDontExists, APIUnauthorized, APISessionDontExists, APISessionExpired, SessionExpired, SessionDontExists
 from config import SESSION_COOKIES_EXPIRE_TIME
@@ -427,7 +446,7 @@ class AuthHandler:
         try:
             if session_id is None:
                 raise APIUnauthorized
-            return self.authenticator.get_user_by_session_id(session_id)
+            return self.authenticator.auth_by_session_id(session_id)
         except SessionExpired:
             raise APISessionExpired
         except SessionDontExists:
@@ -451,6 +470,10 @@ class IStorageReader(ABC):
 class IStorageWriter(ABC):
     @abstractmethod
     async def async_write_from_fastapi_uploadfile_to_file(self, source_file, output_file_path:str) -> None: pass
+    @abstractmethod
+    def create_dir(self, path: str, name: str, exist_ok=True): pass
+    @abstractmethod
+    def create_file(self, path: str, name: str, exist_ok=True): pass
 
 class IArchivator(ABC):
     @abstractmethod
@@ -540,7 +563,7 @@ Base.metadata.create_all(bind=engine)
 
 from dotenv import load_dotenv
 from os import getenv
-from exceptions import StoragePathIsNone, DatabaseUrlIsNone, MemCachePortIsNone, MemCacheExpireTimeIsNone, MemCacheHostIsNone, SessionMakerKeyIsNone
+from exceptions import StoragePathIsNone, DatabaseUrlIsNone, SessionMakerKeyIsNone, CachePortIsNone, CacheHostIsNone, CacheExpireTimeIsNone
 
 load_dotenv('.env')
 
@@ -549,9 +572,9 @@ DATABASE_URL = getenv('DATABASE_URL')
 SESSION_EXPIRE_TIME = getenv('SESSION_EXPIRE_TIME')
 SESSION_COOKIES_EXPIRE_TIME = getenv('SESSION_COOKIES_EXPIRE_TIME')
 SESSION_MAKER_KEY = getenv('SESSION_MAKER_KEY')
-MEMCACHE_HOST = getenv('MEMCACHE_HOST')
-MEMCACHE_PORT = getenv('MEMCACHE_PORT')
-MEMCACHE_EXPIRE_TIME = getenv('MEMCACHE_VALUE_EXPIRE_TIME')
+CACHE_HOST = getenv('CACHE_HOST')
+CACHE_PORT = int(getenv('CACHE_PORT'))
+CACHE_EXPIRE_TIME = getenv('CACHE_EXPIRE_TIME')
 
 
 if STORAGE_PATH is None:
@@ -560,14 +583,14 @@ if DATABASE_URL is None:
     raise DatabaseUrlIsNone
 if SESSION_MAKER_KEY is None:
     raise SessionMakerKeyIsNone
-if MEMCACHE_HOST is None:
-    raise MemCacheHostIsNone
-if MEMCACHE_PORT is None:
-    raise MemCachePortIsNone
-if MEMCACHE_EXPIRE_TIME is None:
-    raise MemCacheExpireTimeIsNone
+if CACHE_HOST is None:
+    raise CacheHostIsNone
+if CACHE_PORT is None:
+    raise CachePortIsNone
+if CACHE_EXPIRE_TIME is None:
+    raise CacheExpireTimeIsNone
 from .view_storage import ViewStorageRootQuery, ViewStorageQuery
-from .upload import UploadQuery
+from .upload import UploadQuery, MakeDirInStorageQuery
 from .download import DownloadQuery
 from .auth import SignUpQuery, AuthenticateQueryfrom pydantic import BaseModel, Field
 
@@ -585,7 +608,11 @@ from pydantic import BaseModel, Field
 
 
 class UploadQuery(BaseModel):
-    path_in_storage: str
+    path_in_storage: str | None = None
+
+class MakeDirInStorageQuery(BaseModel):
+    path_in_storage: str | None = None
+    name: str | None = None
 
 from pydantic import BaseModel, Field
 
@@ -601,7 +628,7 @@ from typing import List
 
 
 class ViewStorageResponse(BaseModel):
-    entities: list[str]from fastapi import UploadFile
+    entities: listfrom fastapi import UploadFile
 from fastapi.testclient import TestClient
 
 
@@ -707,7 +734,7 @@ def test_joiner_create_absolute_path():
     abs_path_file_int_id = joiner.create_absolute_path(user_id_int, path_to_file)
     abs_path_file_str_id = joiner.create_absolute_path(user_id_str, path_to_file)
     expected_path_to_file = f'{STORAGE_PATH}/{user_id_str}/{path_to_file}'
-    assert  abs_path_file_str_id == abs_path_file_int_id == expected_path_to_file
+    assert abs_path_file_str_id == abs_path_file_int_id == expected_path_to_file
 
 def test_ensurer_goes_beyond_limits():
     beyond_path = '/home'
@@ -725,16 +752,15 @@ from .authentication import UserAuthenticationfrom exceptions import UserAlready
 from psycopg2.errors import UniqueViolation
 
 class UserRegistration:
-    def __init__(self, db_reader, db_actor, hasher, logger):
-        self._reader = db_reader
-        self._actor = db_actor
+    def __init__(self,user_actor, hasher, logger):
+        self._user_actor = user_actor
         self.hasher = hasher
         self.logger = logger
 
     def create_user(self, name, password):
         try:
             password = self.hasher.generate_psw_hash(password)
-            self._actor.create_and_write_record_to_db(name=name, password=password)
+            self._user_actor.create_and_write_record_to_db(name=name, password=password)
         except UniqueViolation:
             raise UserAlreadyExists(name)
         except Exception as e:
@@ -753,15 +779,15 @@ class SessionMaker:
     def _get_expire_date(self):
         return self.time_handler.add_days_to_current_date(self.expire_time)
 
-    def _create_session_obj(self, user_id,):
+    def _create_session_id(self):
+        hashed_id = self.hasher.create_session_id_hash()
+        return hashed_id
+
+    def _create_session_obj(self, user_id):
         session_id = self._create_session_id()
         expire_date = self._get_expire_date()
         session_record = self._access.create_record(id=session_id, expire_date=expire_date, user_id=user_id)
         return session_record
-
-    def _create_session_id(self):
-        hashed_id = self.hasher.create_session_id_hash()
-        return hashed_id
 
     def make_session(self, user_id):
         session = self._create_session_obj(user_id)
@@ -769,7 +795,7 @@ class SessionMaker:
         self._access.write_record_to_db(session)
         self.cacher.put_data(session_id, user_id)
         return session_idfrom interfaces import ITimeHandler
-
+from exceptions import SessionExpired
 
 class SessionValidator:
     def __init__(self, time_handler):
@@ -778,7 +804,13 @@ class SessionValidator:
     def is_session_expired(self, session_expire_date):
         if self.time_handler.is_date_future(session_expire_date):
             return False
-        return Truefrom interfaces import IModelReader
+        return True
+
+    def validate_session_or_raise(self, session):
+        if self.is_session_expired(session.expire_date):
+            raise SessionExpired()
+        return True
+from interfaces import IModelReader
 from exceptions import UserDontExists, IncorrectPassword, SessionExpired
 
 
@@ -809,7 +841,7 @@ class UserAuthentication:
         session_id = self._make_session(user.id)
         return session_id
 
-    def get_user_by_session_id(self, session_id):
+    def auth_by_session_id(self, session_id):
         return self.user_getter.get_user_by_session_id(session_id)
 
 
@@ -833,8 +865,7 @@ class UserGetter:
         session = self._get_session_from_db(session_id)
         if not session:
             raise SessionDontExists
-        if self.session_validator.is_session_expired(session.expire_date):
-            raise SessionExpired
+        self.session_validator.validate_session_or_raise(session)
         return self._get_user_from_db(session.user_id)
 
     def get_user_by_session_id(self, session_id):
@@ -940,24 +971,24 @@ class ParentAccess:
         self.session = sessionmaker(engine)
         self.model = model
         self.logger = loggerfrom fastapi import FastAPI, UploadFile, BackgroundTasks, Query, Response, Request, Depends
-from pymemcache.client.base import Client
+from redis import Redis
 
 from alchemy import Session, User
 from logic import StorageReader, StorageWriter, Archivator
 from utils import PathValidEnsurer, Logger, PathJoiner, PathCutter, TimeHandler, Hasher
 from view_handlers import FileResponseHandler, UploadFileHandler, StorageViewHandler, SignUpHandler, AuthHandler
-from config import STORAGE_PATH, MEMCACHE_PORT, MEMCACHE_HOST, MEMCACHE_EXPIRE_TIME, SESSION_EXPIRE_TIME, SESSION_COOKIES_EXPIRE_TIME
-from schemas.query import UploadQuery, DownloadQuery, SignUpQuery, AuthenticateQuery
+from config import STORAGE_PATH, CACHE_EXPIRE_TIME, SESSION_EXPIRE_TIME, CACHE_PORT, CACHE_HOST
+from schemas.query import UploadQuery, DownloadQuery, SignUpQuery, AuthenticateQuery, MakeDirInStorageQuery
 from schemas.response import ViewStorageResponse
-from cache_handler import MemCacher
+from cache_handler import RedisCacher
 from db_repository import ModelReader, ModelActor
 from auth import UserRegistration, UserAuthentication, SessionValidator, SessionMaker, UserGetter
 
-#TODO refactor alchemy package, refactor db_repository
+#TODO refactor alchemy package, refactor db_repository, refactor auth package
 
 app = FastAPI()
 logger = Logger()
-memcache_client = Client((MEMCACHE_HOST, int(MEMCACHE_PORT)))
+redis_client = Redis(host=CACHE_HOST, port=CACHE_PORT)
 path_ensurer = PathValidEnsurer(STORAGE_PATH)
 storage_reader = StorageReader(STORAGE_PATH)
 storage_writer = StorageWriter(STORAGE_PATH)
@@ -966,35 +997,29 @@ path_cutter = PathCutter()
 archivator = Archivator()
 time_handler = TimeHandler()
 hasher = Hasher()
-cacher = MemCacher(memcache_client, int(MEMCACHE_EXPIRE_TIME))
+redis_cacher = RedisCacher(redis_client, CACHE_EXPIRE_TIME)
 user_reader = ModelReader(User, logger)
 user_actor = ModelActor(User, logger)
 session_reader = ModelReader(Session, logger)
 session_actor = ModelActor(Session, logger)
 session_validator = SessionValidator(time_handler)
-session_maker = SessionMaker(int(SESSION_EXPIRE_TIME), session_actor, time_handler, hasher, cacher)
-user_getter = UserGetter(user_reader, session_reader, cacher, session_validator)
-user_registrator = UserRegistration(user_reader, user_actor, hasher, logger)
+session_maker = SessionMaker(int(SESSION_EXPIRE_TIME), session_actor, time_handler, hasher, redis_cacher)
+user_getter = UserGetter(user_reader, session_reader, redis_cacher, session_validator)
+user_registrator = UserRegistration(user_actor, hasher, logger)
 user_authenticator = UserAuthentication(user_reader, session_maker, user_getter, logger, hasher)
 file_response_handler = FileResponseHandler(archivator, storage_reader, logger, path_ensurer)
 upload_handler = UploadFileHandler(storage_writer, path_ensurer, logger)
 storage_view_handler = StorageViewHandler(storage_reader, logger, path_joiner, path_cutter)
-sign_up_handler = SignUpHandler(user_registrator)
+sign_up_handler = SignUpHandler(user_registrator, storage_writer, user_reader)
 auth_handler = AuthHandler(user_authenticator)
+
 
 
 def auth_depend(request: Request):
     return auth_handler.auth_with_session_id(request.cookies.get('session_id'))
 
 
-@app.post('/sign-up')
-def sign_up_endpoint(params: SignUpQuery = Query()):
-    sign_up_handler.sign_up(params)
 
-@app.post('/log-in')
-def authenticate(response: Response, params: AuthenticateQuery = Query()):
-    auth_handler.auth_with_psw_and_set_session_cookie(params.name, params.password, response)
-    return {"message": 'successfully logged_in'}
 
 
 @app.get('/storage', response_model=ViewStorageResponse)
@@ -1026,12 +1051,43 @@ async def upload_entity_endpoint(files: list[UploadFile], params: UploadQuery = 
     abs_path = path_joiner.create_absolute_path(user.id, params.path_in_storage)
     path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, params.path_in_storage)
     await upload_handler.save_files_to_storage(abs_path, files)
+    return {"message": 'successfully uploaded files'}
+
+@app.post('/sign-up')
+def sign_up_endpoint(params: SignUpQuery = Query()):
+    sign_up_handler.sign_up(params)
+    return {"message": 'successfully signed up'}
+
+@app.post('/log-in')
+def authenticate(response: Response, params: AuthenticateQuery = Query()):
+    auth_handler.auth_with_psw_and_set_session_cookie(params.name, params.password, response)
+    return {"message": 'successfully logged_in'}
 
 
-from .cache_handler import MemCacherclass MemCacher:
+@app.post('/make-dir-in-storage')
+def make_dir_in_storage(params: MakeDirInStorageQuery = Query()):
+    return {"message": 'not implemented'}
+
+
+
+from .cache_handler import MemCacher, RedisCacher
+class Cacher:
+    def __init__(self, client, expire_time):
+        self.client: Redis = client
+        self.expire_time = expire_time
+
+    def get_data(self, key):
+        raise NotImplementedError
+
+    def put_data(self, key, value):
+        raise NotImplementedError
+
+    def delete_data(self, key):
+        raise NotImplementedError
+
+class MemCacher(Cacher):
     def __init__(self, memcache_client, data_expire_time):
-        self.client = memcache_client
-        self.expire_time = data_expire_time
+        super().__init__(memcache_client, data_expire_time)
 
     def get_data(self, key):
         return self.client.get(key)
@@ -1041,3 +1097,19 @@ from .cache_handler import MemCacherclass MemCacher:
 
     def delete_data(self, key):
         self.client.delete(key)
+
+class RedisCacher(Cacher):
+    def __init__(self, redis_client, data_expire_time):
+        super().__init__(redis_client, data_expire_time)
+
+    def get_data(self, key):
+        return self.client.get(key)
+
+    def put_data(self, key, value):
+        self.client.set(key, value, ex=self.expire_time, nx=True)
+
+    def delete_data(self, key):
+        self.client.delete(key)
+
+    def is_data_exists(self, key):
+        return self.client.exists(key)

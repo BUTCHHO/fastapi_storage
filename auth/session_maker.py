@@ -11,15 +11,15 @@ class SessionMaker:
     def _get_expire_date(self):
         return self.time_handler.add_days_to_current_date(self.expire_time)
 
-    def _create_session_obj(self, user_id,):
+    def _create_session_id(self):
+        hashed_id = self.hasher.create_session_id_hash()
+        return hashed_id
+
+    def _create_session_obj(self, user_id):
         session_id = self._create_session_id()
         expire_date = self._get_expire_date()
         session_record = self._access.create_record(id=session_id, expire_date=expire_date, user_id=user_id)
         return session_record
-
-    def _create_session_id(self):
-        hashed_id = self.hasher.create_session_id_hash()
-        return hashed_id
 
     def make_session(self, user_id):
         session = self._create_session_obj(user_id)

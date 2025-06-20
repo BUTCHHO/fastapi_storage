@@ -1,1 +1,1 @@
-from .cache_handler import MemCacher
+from .cache_handler import MemCacher, RedisCacher

@@ -24,7 +24,7 @@ class AuthHandler:
         try:
             if session_id is None:
                 raise APIUnauthorized
-            return self.authenticator.get_user_by_session_id(session_id)
+            return self.authenticator.auth_by_session_id(session_id)
         except SessionExpired:
             raise APISessionExpired
         except SessionDontExists:

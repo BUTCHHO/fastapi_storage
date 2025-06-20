@@ -16,6 +16,8 @@ class PathJoiner(PathCreator):
         return self.join_paths(self.root_path, path)
 
     def create_absolute_path(self, user_id, entity_path_in_storage):
+        if entity_path_in_storage == None:
+            entity_path_in_storage = ''
         user_id = str(user_id)
         path_in_storage_with_id = self.join_paths(user_id, entity_path_in_storage)
         return self.join_with_root_path(path_in_storage_with_id)

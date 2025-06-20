@@ -3,4 +3,4 @@ from typing import List
 
 
 class ViewStorageResponse(BaseModel):
-    entities: list[str]
+    entities: list

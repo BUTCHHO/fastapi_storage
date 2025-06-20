@@ -18,8 +18,7 @@ class UserGetter:
         session = self._get_session_from_db(session_id)
         if not session:
             raise SessionDontExists
-        if self.session_validator.is_session_expired(session.expire_date):
-            raise SessionExpired
+        self.session_validator.validate_session_or_raise(session)
         return self._get_user_from_db(session.user_id)
 
     def get_user_by_session_id(self, session_id):

@@ -18,3 +18,9 @@ class APIUnsupportedEntityType(HTTPException):
             detail = {"message":f'unsupported entity type {entity_path_in_storage}', "code":'unsupported_entity_type'}
         super().__init__(status_code, detail)
 
+class APIUserStorageAlreadyExists(HTTPException):
+    def __init__(self):
+        status_code=409
+        detail = {"message": 'Storage for this user already exists. Failed to create new storage', "code": 'user_storage_already_exists'}
+        super().__init__(status_code, detail)
+

@@ -49,7 +49,7 @@ def test_joiner_create_absolute_path():
     abs_path_file_int_id = joiner.create_absolute_path(user_id_int, path_to_file)
     abs_path_file_str_id = joiner.create_absolute_path(user_id_str, path_to_file)
     expected_path_to_file = f'{STORAGE_PATH}/{user_id_str}/{path_to_file}'
-    assert  abs_path_file_str_id == abs_path_file_int_id == expected_path_to_file
+    assert abs_path_file_str_id == abs_path_file_int_id == expected_path_to_file
 
 def test_ensurer_goes_beyond_limits():
     beyond_path = '/home'

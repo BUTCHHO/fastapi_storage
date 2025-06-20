@@ -29,7 +29,7 @@ class UserAuthentication:
         session_id = self._make_session(user.id)
         return session_id
 
-    def get_user_by_session_id(self, session_id):
+    def auth_by_session_id(self, session_id):
         return self.user_getter.get_user_by_session_id(session_id)
 
 

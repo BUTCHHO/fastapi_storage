@@ -8,19 +8,19 @@ class DatabaseUrlIsNone(Exception):
         msg = 'DATABASE_URL value from .env file is None. Must be filled'
         super().__init__(msg)
 
-class MemCachePortIsNone(Exception):
+class CachePortIsNone(Exception):
     def __init__(self):
-        msg = 'MEMCACHE_PORT value from .env file is None. Must be filled'
+        msg = 'CACHE_PORT value from .env file is None. Must be filled'
         super().__init__(msg)
 
-class MemCacheHostIsNone(Exception):
+class CacheHostIsNone(Exception):
     def __init__(self):
-        msg = 'MEMCACHE_HOST value from .env file is None. Must be filled'
+        msg = 'CACHE_HOST value from .env file is None. Must be filled'
         super().__init__(msg)
 
-class MemCacheExpireTimeIsNone(Exception):
+class CacheExpireTimeIsNone(Exception):
     def __init__(self):
-        msg = 'MEMCACHE_VALUE_EXPIRE_TIME value from .env file is None. Must be filled'
+        msg = 'CACHE_EXPIRE_TIME value from .env file is None. Must be filled'
         super().__init__(msg)
 
 class SessionMakerKeyIsNone(Exception):
