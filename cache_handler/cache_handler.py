@@ -1,7 +1,7 @@
 
 class Cacher:
     def __init__(self, client, expire_time):
-        self.client: Redis = client
+        self.client = client
         self.expire_time = expire_time
 
     def get_data(self, key):

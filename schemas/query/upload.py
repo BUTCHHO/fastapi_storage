@@ -6,5 +6,5 @@ class UploadQuery(BaseModel):
 
 class MakeDirInStorageQuery(BaseModel):
     path_in_storage: str | None = None
-    name: str | None = None
+    name: str
 

@@ -48,6 +48,8 @@ class ILogger(ABC):
 class IPathCutter(ABC):
     @abstractmethod
     def cut_user_id_from_storage_path(self, path) -> str: pass
+    @abstractmethod
+    def get_user_id_part(self, path)-> str: pass
 
 class IModelReader(ABC):
     @abstractmethod

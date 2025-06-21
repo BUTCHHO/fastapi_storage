@@ -54,14 +54,18 @@ from .path_cutter import PathCutter
 from .time_handler import TimeHandler
 from .hasher import Hasherfrom exceptions import APIPathGoesBeyondLimits
 from path_explorator import PathGoesBeyondLimits, EntityDoesNotExists, PathValidator
+from interfaces import IPathCutter
 
 
 class PathValidEnsurer(PathValidator):
-    def __init__(self, storage_path):
+    def __init__(self, storage_path, path_cutter):
+        self.path_cutter: IPathCutter = path_cutter
         super().__init__(storage_path)
 
-    def raise_if_goes_beyond_limits(self, requesting_path: str):
+    def raise_if_goes_beyond_limits(self, user_id, requesting_path: str):
         if self.is_goes_beyond_limits(requesting_path):
+            raise PathGoesBeyondLimits(requesting_path)
+        if not int(self.path_cutter.get_user_id_part(requesting_path)) == user_id:
             raise PathGoesBeyondLimits(requesting_path)
 
     def raise_if_entity_dont_exists(self, path:str):
@@ -72,9 +76,9 @@ class PathValidEnsurer(PathValidator):
         self.raise_if_goes_beyond_limits(path)
         self.raise_if_entity_dont_exists(path)
 
-    def ensure_path_safety_on_endpoint_level(self, abs_path, path_in_storage):
+    def ensure_path_safety_on_endpoint_level(self, user_id, abs_path, path_in_storage):
         try:
-            self.raise_if_goes_beyond_limits(abs_path)
+            self.raise_if_goes_beyond_limits(abs_path, path_in_storage)
         except PathGoesBeyondLimits:
             raise APIPathGoesBeyondLimits(path_in_storage)
 
@@ -127,13 +131,13 @@ class PathJoiner(PathCreator):
 
 class PathCutter:
 
-    def _get_id_part(self, path:str) -> str:
+    def get_user_id_part(self, path:str) -> str:
         max_split = 1
         return path.split('/', max_split)[0]
 
     def cut_user_id_from_storage_path(self, path: str):
         path = path.lstrip('/') # input path looks like /{id}/folder/file.txt. removing first slash
-        id_part = self._get_id_part(path)
+        id_part = self.get_user_id_part(path)
         if not id_part.isdigit():
             raise NotAUserId(path)
         return path.removeprefix(id_part)from datetime import datetime
@@ -168,11 +172,12 @@ class Hasher:
 
     def create_session_id_hash(self):
         return token_urlsafe(32)
-from .path_http_exc import APIPathGoesBeyondLimits, APIUserStorageAlreadyExists, APIEntityDoesNotExists, APIUnsupportedEntityType
+from .path_http_exc import APIPathGoesBeyondLimits, APIUserStorageAlreadyExists, APIDirectoryAlreadyExists, APIEntityDoesNotExists, APIUnsupportedEntityType
 from .exc import NotAUserId
 from .auth import UserAlreadyExists, UserDontExists, IncorrectPassword, SessionExpired, SessionDontExists
 from .auth_http_exc import APIUserAlreadyExists, APIUserDontExists, APIIncorrectPassword, APISessionDontExists, APISessionExpired, APIUnauthorized
-from .config_exc import StoragePathIsNone, DatabaseUrlIsNone, CacheHostIsNone, CachePortIsNone, CacheExpireTimeIsNone, SessionMakerKeyIsNoneclass NotAUserId(Exception):
+from .config_exc import StoragePathIsNone, DatabaseUrlIsNone, CacheHostIsNone, CachePortIsNone, CacheExpireTimeIsNone, SessionMakerKeyIsNone
+from .path_exc import EntityDoesNotExistsclass NotAUserId(Exception):
     def __init__(self, path:str):
         msg = f'path {path} dont starts with user_id. Must look like \'1/folder/file.txt\''
         super().__init__(msg)class UserAlreadyExists(Exception):
@@ -219,6 +224,12 @@ class APIUserStorageAlreadyExists(HTTPException):
     def __init__(self):
         status_code=409
         detail = {"message": 'Storage for this user already exists. Failed to create new storage', "code": 'user_storage_already_exists'}
+        super().__init__(status_code, detail)
+
+class APIDirectoryAlreadyExists(HTTPException):
+    def __init__(self, path):
+        status_code = 409
+        detail = {"message": f'Directory at {path} already exists', "code":'diractory_already_exists'}
         super().__init__(status_code, detail)
 
 from fastapi.exceptions import HTTPException
@@ -286,11 +297,13 @@ class CacheExpireTimeIsNone(Exception):
 class SessionMakerKeyIsNone(Exception):
     def __init__(self):
         msg = 'SESSION_MAKER_KEY value from .env file is None. Must be filled'
-        super().__init__(msg)from .file_response_handler import FileResponseHandler
+        super().__init__(msg)from path_explorator.exceptions import EntityDoesNotExistsfrom .file_response_handler import FileResponseHandler
 from .upload_handler import UploadFileHandler
 from .storage_view_handler import StorageViewHandler
 from .sign_up_handler import SignUpHandler
-from .auth_handler import AuthHandlerfrom fastapi.responses import FileResponse
+from .auth_handler import AuthHandler
+from .make_dir_handler import MakeDirHandler
+from .logout_handler import  LogOutHandlerfrom fastapi.responses import FileResponse
 from fastapi import HTTPException
 from interfaces import IStorageReader, IArchivator, ILogger, IPathValidator
 from exceptions import APIPathGoesBeyondLimits, APIEntityDoesNotExists, APIUnsupportedEntityType
@@ -372,7 +385,9 @@ class UploadFileHandler:
     async def save_files_to_storage(self, absolute_path, files: list):
         await self._iterate_and_save_files_to_storage(files, absolute_path)
 
+from exceptions import APIEntityDoesNotExists, EntityDoesNotExists
 from interfaces import ILogger, IStorageReader, IPathJoiner, IPathCutter
+
 
 class StorageViewHandler:
     def __init__(self, storage_reader, logger, path_joiner, path_cutter):
@@ -393,12 +408,16 @@ class StorageViewHandler:
         entitynames = self.storage_reader.get_all_entitynames_in_dir(abs_dir_path)
         return self._cut_user_id_from_entitynames(entitynames)
 
-    def get_list_of_entities(self, abs_path):
+    def get_list_of_entities(self, abs_path, path_in_storage):
         try:
             entitynames = self._get_all_entitynames_in_dir(abs_path)
             return entitynames
+        except EntityDoesNotExists:
+            raise APIEntityDoesNotExists(path_in_storage)
+
         except Exception as e:
-            self.logger.log(e)from exceptions import APIUserAlreadyExists, UserAlreadyExists, APIUserStorageAlreadyExists
+            self.logger.log(e)
+from exceptions import APIUserAlreadyExists, UserAlreadyExists, APIUserStorageAlreadyExists
 from interfaces import IStorageWriter
 
 class SignUpHandler:
@@ -447,11 +466,45 @@ class AuthHandler:
             if session_id is None:
                 raise APIUnauthorized
             return self.authenticator.auth_by_session_id(session_id)
+
         except SessionExpired:
             raise APISessionExpired
         except SessionDontExists:
             raise APISessionDontExists
 
+from interfaces import IStorageWriter
+from exceptions import APIDirectoryAlreadyExists
+
+
+class MakeDirHandler():
+    def __init__(self, logger, storage_writer):
+        self.logger = logger
+        self.storage_writer: IStorageWriter = storage_writer
+
+    def make_dir_in_storage(self, path, name):
+        if path is None:
+            path = ''
+        try:
+            self.storage_writer.create_dir(path, name)
+        except FileExistsError:
+            raise APIDirectoryAlreadyExistsfrom fastapi import Request, Response
+
+
+class LogOutHandler:
+    def __init__(self, session_deleter, logger):
+        self.session_deleter = session_deleter
+        self.logger = logger
+
+    def logout_user(self, request: Request, response: Response):
+        try:
+            session_id = request.cookies.get('session_id')
+            if session_id is None:
+                return
+            response.delete_cookie('session_id')
+            self.session_deleter.delete_session(session_id)
+        except Exception as e:
+            self.logger.log(e)
+            raise e
 from .interfaces import IArchivator, IPathValidator, IStorageReader, IStorageWriter, ILogger, IPathJoiner, IPathCutter, IModelReader, IModelActor, ITimeHandlerfrom typing import Callable
 from abc import ABC, abstractmethod
 
@@ -502,6 +555,8 @@ class ILogger(ABC):
 class IPathCutter(ABC):
     @abstractmethod
     def cut_user_id_from_storage_path(self, path) -> str: pass
+    @abstractmethod
+    def get_user_id_part(self, path)-> str: pass
 
 class IModelReader(ABC):
     @abstractmethod
@@ -538,6 +593,7 @@ from sqlalchemy.orm import declarative_base
 from config import DATABASE_URL
 
 engine = create_engine(DATABASE_URL)
+
 
 Base = declarative_base()
 
@@ -612,7 +668,7 @@ class UploadQuery(BaseModel):
 
 class MakeDirInStorageQuery(BaseModel):
     path_in_storage: str | None = None
-    name: str | None = None
+    name: str
 
 from pydantic import BaseModel, Field
 
@@ -748,7 +804,8 @@ from .session_maker import SessionMaker
 from .user_getter import UserGetter
 from .registration import UserRegistration
 from .session_validator import SessionValidator
-from .authentication import UserAuthenticationfrom exceptions import UserAlreadyExists
+from .authentication import UserAuthentication
+from .session_deleter import SessionDeleterfrom exceptions import UserAlreadyExists
 from psycopg2.errors import UniqueViolation
 
 class UserRegistration:
@@ -873,10 +930,24 @@ class UserGetter:
         if not user_id:
             return self._get_user_if_session_not_in_cache(session_id)
         user_id = int(user_id)
-        self.cacher.put_data(session_id, user_id)
         return self._get_user_from_db(user_id)
 
-from .reader import ModelReader
+from interfaces import IModelActor
+
+
+class SessionDeleter:
+    def __init__(self, cacher, session_actor):
+        self.cacher = cacher
+        self.session_actor: IModelActor = session_actor
+
+    def delete_session(self, session_id):
+        """
+        MAKE SURE YOU DELETE SESSION_ID FROM USER COOKIES!!!
+        :param session_id:
+        :return:
+        """
+        self.cacher.delete_data(session_id)
+        self.session_actor.delete_record_by_id(session_id)from .reader import ModelReader
 from .actor import ModelActorfrom sqlalchemy.orm import Session
 
 from .parent_access import ParentAccess
@@ -976,24 +1047,24 @@ from redis import Redis
 from alchemy import Session, User
 from logic import StorageReader, StorageWriter, Archivator
 from utils import PathValidEnsurer, Logger, PathJoiner, PathCutter, TimeHandler, Hasher
-from view_handlers import FileResponseHandler, UploadFileHandler, StorageViewHandler, SignUpHandler, AuthHandler
+from depends import AuthDepend
+from view_handlers import MakeDirHandler, FileResponseHandler, UploadFileHandler, StorageViewHandler, SignUpHandler, AuthHandler, LogOutHandler
 from config import STORAGE_PATH, CACHE_EXPIRE_TIME, SESSION_EXPIRE_TIME, CACHE_PORT, CACHE_HOST
 from schemas.query import UploadQuery, DownloadQuery, SignUpQuery, AuthenticateQuery, MakeDirInStorageQuery
 from schemas.response import ViewStorageResponse
 from cache_handler import RedisCacher
 from db_repository import ModelReader, ModelActor
-from auth import UserRegistration, UserAuthentication, SessionValidator, SessionMaker, UserGetter
-
+from auth import UserRegistration, UserAuthentication, SessionValidator, SessionMaker, UserGetter, SessionDeleter
 #TODO refactor alchemy package, refactor db_repository, refactor auth package
 
 app = FastAPI()
 logger = Logger()
-redis_client = Redis(host=CACHE_HOST, port=CACHE_PORT)
-path_ensurer = PathValidEnsurer(STORAGE_PATH)
+redis_client = Redis(host=CACHE_HOST, port=CACHE_PORT, decode_responses=True)
 storage_reader = StorageReader(STORAGE_PATH)
 storage_writer = StorageWriter(STORAGE_PATH)
 path_joiner = PathJoiner(STORAGE_PATH)
 path_cutter = PathCutter()
+path_ensurer = PathValidEnsurer(STORAGE_PATH, path_cutter)
 archivator = Archivator()
 time_handler = TimeHandler()
 hasher = Hasher()
@@ -1007,51 +1078,61 @@ session_maker = SessionMaker(int(SESSION_EXPIRE_TIME), session_actor, time_handl
 user_getter = UserGetter(user_reader, session_reader, redis_cacher, session_validator)
 user_registrator = UserRegistration(user_actor, hasher, logger)
 user_authenticator = UserAuthentication(user_reader, session_maker, user_getter, logger, hasher)
+session_deleter = SessionDeleter(redis_cacher, session_actor)
 file_response_handler = FileResponseHandler(archivator, storage_reader, logger, path_ensurer)
 upload_handler = UploadFileHandler(storage_writer, path_ensurer, logger)
 storage_view_handler = StorageViewHandler(storage_reader, logger, path_joiner, path_cutter)
 sign_up_handler = SignUpHandler(user_registrator, storage_writer, user_reader)
 auth_handler = AuthHandler(user_authenticator)
+make_dir_handler = MakeDirHandler(logger, storage_writer)
+logout_handler = LogOutHandler(session_deleter, logger)
 
-
-
-def auth_depend(request: Request):
-    return auth_handler.auth_with_session_id(request.cookies.get('session_id'))
-
+auth_depend = AuthDepend(auth_handler)
 
 
 
 
 @app.get('/storage', response_model=ViewStorageResponse)
-def view_storage_root(user=Depends(auth_depend)):
+def view_storage_root(user=Depends(auth_depend.auth)):
     abs_path = path_joiner.join_with_root_path(user.id)
-    path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, user.id)
-    entities = storage_view_handler.get_list_of_entities(abs_path)
+    path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, user.id, '')
+    entities = storage_view_handler.get_list_of_entities(abs_path, '')
     return {"entities": entities}
 
 
 @app.get('/storage/{entity_path_in_storage:path}', response_model=ViewStorageResponse)
-async def view_storage(entity_path_in_storage: str, user=Depends(auth_depend)):
+async def view_storage(entity_path_in_storage: str, user=Depends(auth_depend.auth)):
     abs_path = path_joiner.create_absolute_path(user.id, entity_path_in_storage)
-    path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, entity_path_in_storage)
-    entities = storage_view_handler.get_list_of_entities(abs_path)
+    path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, entity_path_in_storage, entity_path_in_storage)
+    entities = storage_view_handler.get_list_of_entities(abs_path, entity_path_in_storage)
     return {"entities": entities}
 
 @app.get('/download-entity')
-def download_entity_endpoint(background_tasks: BackgroundTasks, params: DownloadQuery = Query(), user=Depends(auth_depend)):
+def download_entity_endpoint(background_tasks: BackgroundTasks, params: DownloadQuery = Query(), user=Depends(auth_depend.auth)):
     abs_path = path_joiner.create_absolute_path(user.id, params.entity_path_in_storage)
-    path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, params.entity_path_in_storage)
+    path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, params.entity_path_in_storage, params.entity_path_in_storage)
     response = file_response_handler.get_response(abs_path, params.entity_path_in_storage)
     background_tasks.add_task(archivator.cleanup_temp_files)
     return response
 
 
 @app.post('/upload-entity')
-async def upload_entity_endpoint(files: list[UploadFile], params: UploadQuery = Query(), user=Depends(auth_depend)):
+async def upload_entity_endpoint(files: list[UploadFile], params: UploadQuery = Query(), user=Depends(auth_depend.auth)):
     abs_path = path_joiner.create_absolute_path(user.id, params.path_in_storage)
-    path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, params.path_in_storage)
+    path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, params.path_in_storage, params.path_in_storage)
     await upload_handler.save_files_to_storage(abs_path, files)
     return {"message": 'successfully uploaded files'}
+
+@app.post('/make-dir-in-storage')
+def make_dir_in_storage(user=Depends(auth_depend.auth), params: MakeDirInStorageQuery = Query()):
+    abs_path = path_joiner.create_absolute_path(user.id, params.path_in_storage)
+    path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, params.path_in_storage, params.path_in_storage)
+    make_dir_handler.make_dir_in_storage(abs_path, params.name)
+
+@app.post('/log-out')
+def log_out_endpoint(request: Request, response: Response):
+    logout_handler.logout_user(request, response)
+
 
 @app.post('/sign-up')
 def sign_up_endpoint(params: SignUpQuery = Query()):
@@ -1062,18 +1143,10 @@ def sign_up_endpoint(params: SignUpQuery = Query()):
 def authenticate(response: Response, params: AuthenticateQuery = Query()):
     auth_handler.auth_with_psw_and_set_session_cookie(params.name, params.password, response)
     return {"message": 'successfully logged_in'}
-
-
-@app.post('/make-dir-in-storage')
-def make_dir_in_storage(params: MakeDirInStorageQuery = Query()):
-    return {"message": 'not implemented'}
-
-
-
 from .cache_handler import MemCacher, RedisCacher
 class Cacher:
     def __init__(self, client, expire_time):
-        self.client: Redis = client
+        self.client = client
         self.expire_time = expire_time
 
     def get_data(self, key):
@@ -1112,4 +1185,13 @@ class RedisCacher(Cacher):
         self.client.delete(key)
 
     def is_data_exists(self, key):
-        return self.client.exists(key)
+        return self.client.exists(key)from .auth import AuthDependfrom fastapi import Request
+
+
+class AuthDepend:
+    def __init__(self, auth_handler):
+        self.auth_handler = auth_handler
+
+    def auth(self, request: Request):
+        session_id = request.cookies.get('session_id')
+        return self.auth_handler.auth_with_session_id(session_id)

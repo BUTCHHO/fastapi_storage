@@ -26,6 +26,5 @@ class UserGetter:
         if not user_id:
             return self._get_user_if_session_not_in_cache(session_id)
         user_id = int(user_id)
-        self.cacher.put_data(session_id, user_id)
         return self._get_user_from_db(user_id)
 

@@ -24,3 +24,9 @@ class APIUserStorageAlreadyExists(HTTPException):
         detail = {"message": 'Storage for this user already exists. Failed to create new storage', "code": 'user_storage_already_exists'}
         super().__init__(status_code, detail)
 
+class APIDirectoryAlreadyExists(HTTPException):
+    def __init__(self, path):
+        status_code = 409
+        detail = {"message": f'Directory at {path} already exists', "code":'diractory_already_exists'}
+        super().__init__(status_code, detail)
+

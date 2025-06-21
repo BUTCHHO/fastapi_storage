@@ -1,4 +1,6 @@
+from exceptions import APIEntityDoesNotExists, EntityDoesNotExists
 from interfaces import ILogger, IStorageReader, IPathJoiner, IPathCutter
+
 
 class StorageViewHandler:
     def __init__(self, storage_reader, logger, path_joiner, path_cutter):
@@ -19,9 +21,12 @@ class StorageViewHandler:
         entitynames = self.storage_reader.get_all_entitynames_in_dir(abs_dir_path)
         return self._cut_user_id_from_entitynames(entitynames)
 
-    def get_list_of_entities(self, abs_path):
+    def get_list_of_entities(self, abs_path, path_in_storage):
         try:
             entitynames = self._get_all_entitynames_in_dir(abs_path)
             return entitynames
+        except EntityDoesNotExists:
+            raise APIEntityDoesNotExists(path_in_storage)
+
         except Exception as e:
             self.logger.log(e)
