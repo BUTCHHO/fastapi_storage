@@ -37,16 +37,10 @@ class FileResponseHandler:
     def get_file_response(self, absolute_path_file):
         return self._make_response(absolute_path_file)
 
-    def ensure_path_valid_or_httpexception(self, absolute_path, entity_path_in_storage):
-        try:
-            self.validator.raise_if_path_invalid(absolute_path)
-        except PathGoesBeyondLimits:
-            raise APIPathGoesBeyondLimits(entity_path_in_storage)
-        except EntityDoesNotExists:
-            raise APIEntityDoesNotExists(entity_path_in_storage)
 
     def get_response(self, absolute_entity_path, entity_path_in_storage):
-        self.ensure_path_valid_or_httpexception(absolute_entity_path, entity_path_in_storage)
+        if not self.validator.is_exists(absolute_entity_path):
+            raise EntityDoesNotExists
         if self.storage_reader.is_dir(absolute_entity_path):
             return self.get_zip_file_response(absolute_entity_path)
         if self.storage_reader.is_file(absolute_entity_path):

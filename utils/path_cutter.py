@@ -1,14 +1,24 @@
 from exceptions import NotAUserId
 
 class PathCutter:
+    def __init__(self, root_path):
+        self.root_path = root_path
 
-    def get_user_id_part(self, path:str) -> str:
-        max_split = 1
-        return path.split('/', max_split)[0]
+    def get_user_id_from_abs_path(self, abs_path: str):
+        path = abs_path.removeprefix(self.root_path)
+        id = self.get_user_id_part_from_rel_path(path)
+        if not id.isdigit():
+            raise NotAUserId(abs_path)
+        return id
 
-    def cut_user_id_from_storage_path(self, path: str):
-        path = path.lstrip('/') # input path looks like /{id}/folder/file.txt. removing first slash
-        id_part = self.get_user_id_part(path)
-        if not id_part.isdigit():
-            raise NotAUserId(path)
-        return path.removeprefix(id_part)
+    def get_user_id_part_from_rel_path(self, path:str) -> str:
+        #path must look like '/<id>/some/path or '<id>/some/path
+        if path[0] == '/':
+            return path.split('/')[1]
+        return path.split('/')[0]
+
+    def remove_id_from_rel_path(self, rel_path):
+        if rel_path[0] == '/':
+            return rel_path[2:]
+        return rel_path[1:]
+

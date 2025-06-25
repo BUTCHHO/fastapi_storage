@@ -1,14 +1,19 @@
-from path_explorator import PathCreator
+from pathlib import Path
 
 
-class PathJoiner(PathCreator):
+class PathJoiner:
     def __init__(self, root_path):
         self.root_path = root_path
-        super().__init__()
+
 
     @property
     def root(self):
         return self.root_path
+
+
+    def join_paths(self, path1, path2):
+        new_path = Path(Path(path1) / Path(path2))
+        return new_path.__str__()
 
     def join_with_root_path(self, path:str | int):
         if isinstance(path, int):
@@ -16,8 +21,13 @@ class PathJoiner(PathCreator):
         return self.join_paths(self.root_path, path)
 
     def create_absolute_path(self, user_id, entity_path_in_storage):
-        if entity_path_in_storage == None:
+        if entity_path_in_storage is None:
             entity_path_in_storage = ''
         user_id = str(user_id)
-        path_in_storage_with_id = self.join_paths(user_id, entity_path_in_storage)
-        return self.join_with_root_path(path_in_storage_with_id)
+        abs_user_dir_path = self.create_absolute_user_dir_path(user_id)
+        abs_path = self.join_paths(abs_user_dir_path, entity_path_in_storage)
+        return Path(abs_path).resolve().__str__()
+
+    def create_absolute_user_dir_path(self, user_id):
+        user_id = str(user_id)
+        return self.join_with_root_path(user_id)

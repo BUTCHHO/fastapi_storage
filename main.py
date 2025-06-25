@@ -12,7 +12,7 @@ from schemas.response import ViewStorageResponse
 from cache_handler import RedisCacher
 from db_repository import ModelReader, ModelActor
 from auth import UserRegistration, UserAuthentication, SessionValidator, SessionMaker, UserGetter, SessionDeleter
-#TODO refactor alchemy package, refactor db_repository, refactor auth package
+
 
 app = FastAPI()
 logger = Logger()
@@ -20,8 +20,8 @@ redis_client = Redis(host=CACHE_HOST, port=CACHE_PORT, decode_responses=True)
 storage_reader = StorageReader(STORAGE_PATH)
 storage_writer = StorageWriter(STORAGE_PATH)
 path_joiner = PathJoiner(STORAGE_PATH)
-path_cutter = PathCutter()
-path_ensurer = PathValidEnsurer(STORAGE_PATH, path_cutter)
+path_cutter = PathCutter(STORAGE_PATH)
+path_ensurer = PathValidEnsurer(STORAGE_PATH, path_cutter, path_joiner)
 archivator = Archivator()
 time_handler = TimeHandler()
 hasher = Hasher()
@@ -48,26 +48,35 @@ auth_depend = AuthDepend(auth_handler)
 
 
 
+#TODO создать большой модуль для работы с путями вместо использования библиотеки path_explorator
+# скопировать туда всё из этой библиотеки и работать только с этим модулем. Так будет проще редактировать её
+# потом уже выкладывать на pypi как библиотеку
+
+#TODO валидация путей. Можно создать какой нибудь метод который бы создавал абсолютный путь до хранилища с id юзера, а потом
+# потом уже смотреть, не выходит ли запрашиваемый путь за пределы этого пути
+
+
 
 @app.get('/storage', response_model=ViewStorageResponse)
-def view_storage_root(user=Depends(auth_depend.auth)):
-    abs_path = path_joiner.join_with_root_path(user.id)
-    path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, user.id, '')
-    entities = storage_view_handler.get_list_of_entities(abs_path, '')
+def view_storage_root(entity_path_in_storage = '', user=Depends(auth_depend.auth)):
+    abs_path = path_joiner.create_absolute_path(user.id, entity_path_in_storage)
+    path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, user.id, entity_path_in_storage)
+    entities = storage_view_handler.get_list_of_entities(abs_path, entity_path_in_storage)
     return {"entities": entities}
 
 
 @app.get('/storage/{entity_path_in_storage:path}', response_model=ViewStorageResponse)
 async def view_storage(entity_path_in_storage: str, user=Depends(auth_depend.auth)):
+    #TODO FIX VALIDATION !!!!!!
     abs_path = path_joiner.create_absolute_path(user.id, entity_path_in_storage)
-    path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, entity_path_in_storage, entity_path_in_storage)
+    path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, user.id, entity_path_in_storage)
     entities = storage_view_handler.get_list_of_entities(abs_path, entity_path_in_storage)
     return {"entities": entities}
 
 @app.get('/download-entity')
 def download_entity_endpoint(background_tasks: BackgroundTasks, params: DownloadQuery = Query(), user=Depends(auth_depend.auth)):
     abs_path = path_joiner.create_absolute_path(user.id, params.entity_path_in_storage)
-    path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, params.entity_path_in_storage, params.entity_path_in_storage)
+    path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, user.id, params.entity_path_in_storage)
     response = file_response_handler.get_response(abs_path, params.entity_path_in_storage)
     background_tasks.add_task(archivator.cleanup_temp_files)
     return response
@@ -76,14 +85,14 @@ def download_entity_endpoint(background_tasks: BackgroundTasks, params: Download
 @app.post('/upload-entity')
 async def upload_entity_endpoint(files: list[UploadFile], params: UploadQuery = Query(), user=Depends(auth_depend.auth)):
     abs_path = path_joiner.create_absolute_path(user.id, params.path_in_storage)
-    path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, params.path_in_storage, params.path_in_storage)
+    path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, user.id, params.path_in_storage)
     await upload_handler.save_files_to_storage(abs_path, files)
     return {"message": 'successfully uploaded files'}
 
 @app.post('/make-dir-in-storage')
 def make_dir_in_storage(user=Depends(auth_depend.auth), params: MakeDirInStorageQuery = Query()):
     abs_path = path_joiner.create_absolute_path(user.id, params.path_in_storage)
-    path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, params.path_in_storage, params.path_in_storage)
+    path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, user.id, params.path_in_storage)
     make_dir_handler.make_dir_in_storage(abs_path, params.name)
 
 @app.post('/log-out')
@@ -100,3 +109,4 @@ def sign_up_endpoint(params: SignUpQuery = Query()):
 def authenticate(response: Response, params: AuthenticateQuery = Query()):
     auth_handler.auth_with_psw_and_set_session_cookie(params.name, params.password, response)
     return {"message": 'successfully logged_in'}
+

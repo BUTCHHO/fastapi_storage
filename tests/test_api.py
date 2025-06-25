@@ -1,9 +1,16 @@
+from http.client import responses
+
 from fastapi import UploadFile
 from fastapi.testclient import TestClient
 
 
 from main import app
 client = TestClient(app)
+
+def test_sign_in():
+    params = {'name': 'tester1', 'password': '123'}
+    response = client.post('/log-in', params=params)
+    assert response.status_code == 200
 
 def test_view_root_storage():
     url = '/storage'

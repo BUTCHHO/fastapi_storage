@@ -47,10 +47,11 @@ class ILogger(ABC):
 
 class IPathCutter(ABC):
     @abstractmethod
-    def cut_user_id_from_storage_path(self, path) -> str: pass
+    def get_user_id_from_rel_path(self, path:str) -> str: pass
     @abstractmethod
-    def get_user_id_part(self, path)-> str: pass
-
+    def get_user_id_from_abs_path(self, path: str) -> str: pass
+    @abstractmethod
+    def remove_id_from_rel_path(self, path: str) -> str: pass
 class IModelReader(ABC):
     @abstractmethod
     def get_by_id(self, id: int): pass
