@@ -22,7 +22,6 @@ class StorageViewHandler:
 
     def _get_all_entitynames_in_dir(self, rel_dir_path):
         entitynames = self.storage_reader.get_all_entitynames_in_dir(rel_dir_path)
-        print(entitynames)
         return self._cut_user_id_from_entitynames(entitynames)
 
     def get_list_of_entities(self, user_id, path_in_storage):
