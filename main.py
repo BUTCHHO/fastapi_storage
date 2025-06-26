@@ -17,13 +17,13 @@ from auth import UserRegistration, UserAuthentication, SessionValidator, Session
 app = FastAPI()
 logger = Logger()
 redis_client = Redis(host=CACHE_HOST, port=CACHE_PORT, decode_responses=True)
-storage_reader = StorageReader(STORAGE_PATH)
-storage_writer = StorageWriter(STORAGE_PATH)
 path_joiner = PathJoiner(STORAGE_PATH)
 path_cutter = PathCutter(STORAGE_PATH)
 path_ensurer = PathValidEnsurer(STORAGE_PATH, path_cutter, path_joiner)
 archivator = Archivator()
 time_handler = TimeHandler()
+storage_reader = StorageReader(STORAGE_PATH, path_joiner, path_cutter)
+storage_writer = StorageWriter(STORAGE_PATH)
 hasher = Hasher()
 redis_cacher = RedisCacher(redis_client, CACHE_EXPIRE_TIME)
 user_reader = ModelReader(User, logger)
@@ -36,64 +36,44 @@ user_getter = UserGetter(user_reader, session_reader, redis_cacher, session_vali
 user_registrator = UserRegistration(user_actor, hasher, logger)
 user_authenticator = UserAuthentication(user_reader, session_maker, user_getter, logger, hasher)
 session_deleter = SessionDeleter(redis_cacher, session_actor)
-file_response_handler = FileResponseHandler(archivator, storage_reader, logger, path_ensurer)
-upload_handler = UploadFileHandler(storage_writer, path_ensurer, logger)
-storage_view_handler = StorageViewHandler(storage_reader, logger, path_joiner, path_cutter)
+file_response_handler = FileResponseHandler(archivator, storage_reader, logger, path_ensurer, path_joiner)
+upload_handler = UploadFileHandler(storage_writer, path_ensurer, logger, path_joiner)
+storage_view_handler = StorageViewHandler(storage_reader, logger, path_joiner, path_cutter, path_ensurer)
 sign_up_handler = SignUpHandler(user_registrator, storage_writer, user_reader)
 auth_handler = AuthHandler(user_authenticator)
-make_dir_handler = MakeDirHandler(logger, storage_writer)
+make_dir_handler = MakeDirHandler(logger, storage_writer, path_joiner, path_ensurer)
 logout_handler = LogOutHandler(session_deleter, logger)
 
 auth_depend = AuthDepend(auth_handler)
 
 
 
-#TODO создать большой модуль для работы с путями вместо использования библиотеки path_explorator
-# скопировать туда всё из этой библиотеки и работать только с этим модулем. Так будет проще редактировать её
-# потом уже выкладывать на pypi как библиотеку
-
-#TODO валидация путей. Можно создать какой нибудь метод который бы создавал абсолютный путь до хранилища с id юзера, а потом
-# потом уже смотреть, не выходит ли запрашиваемый путь за пределы этого пути
-
-
-
 @app.get('/storage', response_model=ViewStorageResponse)
 def view_storage_root(entity_path_in_storage = '', user=Depends(auth_depend.auth)):
-    abs_path = path_joiner.create_absolute_path(user.id, entity_path_in_storage)
-    path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, user.id, entity_path_in_storage)
-    entities = storage_view_handler.get_list_of_entities(abs_path, entity_path_in_storage)
+    entities = storage_view_handler.get_list_of_entities(user.id, entity_path_in_storage)
     return {"entities": entities}
 
 
 @app.get('/storage/{entity_path_in_storage:path}', response_model=ViewStorageResponse)
 async def view_storage(entity_path_in_storage: str, user=Depends(auth_depend.auth)):
-    #TODO FIX VALIDATION !!!!!!
-    abs_path = path_joiner.create_absolute_path(user.id, entity_path_in_storage)
-    path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, user.id, entity_path_in_storage)
-    entities = storage_view_handler.get_list_of_entities(abs_path, entity_path_in_storage)
+    entities = storage_view_handler.get_list_of_entities(user.id, entity_path_in_storage)
     return {"entities": entities}
 
 @app.get('/download-entity')
 def download_entity_endpoint(background_tasks: BackgroundTasks, params: DownloadQuery = Query(), user=Depends(auth_depend.auth)):
-    abs_path = path_joiner.create_absolute_path(user.id, params.entity_path_in_storage)
-    path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, user.id, params.entity_path_in_storage)
-    response = file_response_handler.get_response(abs_path, params.entity_path_in_storage)
+    response = file_response_handler.get_response(user.id, params.entity_path_in_storage)
     background_tasks.add_task(archivator.cleanup_temp_files)
     return response
 
 
 @app.post('/upload-entity')
 async def upload_entity_endpoint(files: list[UploadFile], params: UploadQuery = Query(), user=Depends(auth_depend.auth)):
-    abs_path = path_joiner.create_absolute_path(user.id, params.path_in_storage)
-    path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, user.id, params.path_in_storage)
-    await upload_handler.save_files_to_storage(abs_path, files)
+    await upload_handler.save_files_to_storage(user.id, params.path_in_storage, files)
     return {"message": 'successfully uploaded files'}
 
 @app.post('/make-dir-in-storage')
 def make_dir_in_storage(user=Depends(auth_depend.auth), params: MakeDirInStorageQuery = Query()):
-    abs_path = path_joiner.create_absolute_path(user.id, params.path_in_storage)
-    path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, user.id, params.path_in_storage)
-    make_dir_handler.make_dir_in_storage(abs_path, params.name)
+    make_dir_handler.make_dir_in_storage(user.id, params.path_in_storage, params.name)
 
 @app.post('/log-out')
 def log_out_endpoint(request: Request, response: Response):
