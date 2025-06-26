@@ -4,9 +4,6 @@ class PathCutter:
     def __init__(self, root_path):
         self.root_path = root_path
 
-    def cut_path(self, path:str, cutting_part):
-        return path.removeprefix(cutting_part)
-
     def get_user_id_from_abs_path(self, abs_path: str):
         path = abs_path.removeprefix(self.root_path)
         id = self.get_user_id_part_from_rel_path(path)

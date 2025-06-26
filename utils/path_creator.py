@@ -26,7 +26,7 @@ class PathJoiner:
         user_id = str(user_id)
         abs_user_dir_path = self.create_absolute_user_dir_path(user_id)
         abs_path = self.join_paths(abs_user_dir_path, entity_path_in_storage)
-        return abs_path
+        return Path(abs_path).resolve().__str__()
 
     def create_absolute_user_dir_path(self, user_id):
         user_id = str(user_id)

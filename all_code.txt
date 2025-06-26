@@ -1,48 +1,185 @@
-class NotAUserId(Exception):
-    def __init__(self, path:str):
-        msg = f'path {path} dont starts with user_id. Must look like \'1/folder/file.txt\''
-        super().__init__(msg)from fastapi import HTTPException
+from .directory_reader import StorageReader
+from .archivator import Archivator
+from .storage_writer import StorageWriterfrom path_explorator import DirectoryExplorer
+
+class StorageReader(DirectoryExplorer):
+    def __init__(self, root_dir):
+        super().__init__(root_dir)
+from pathlib import Path
+from tempfile import mkdtemp
+from zipfile import ZipFile, ZIP_DEFLATED
 
 
-class APITooManyFiles(HTTPException):
+class Archivator:
     def __init__(self):
-        detail = {"message": 'Too many files were uploaded at once. Please try again with fewer files per upload.',
-                  "code": 'too_many_files'}
-        status_code = 429
-        super().__init__(detail, status_code)from .path_http_exc import APIPathGoesBeyondLimits, APIUserStorageAlreadyExists, APIDirectoryAlreadyExists, APIEntityDoesNotExists, APIUnsupportedEntityType
+        self._zip_path = None
+        self.tmp_dir = Path(mkdtemp())
+
+    def has_zip_path(self):
+        return self._zip_path is not None
+
+    def make_zip_in_tmp_dir(self, archivable_dir):
+        return self.tmp_dir / f"{archivable_dir.name}.zip"
+
+    def write_from_dir_to_zip(self, dir, zip):
+        with ZipFile(zip, mode='w', compression=ZIP_DEFLATED, allowZip64=True, compresslevel=6) as zipf:
+            for file_path in dir.rglob('*'):
+                if file_path.is_file():
+                    entity = file_path.relative_to(dir)
+                    zipf.write(file_path, entity)
+
+    def cleanup_temp_files(self):
+        if self.has_zip_path():
+            self._cleanup()
+            self._zip_path = None
+
+    def _cleanup(self):
+        self._zip_path.unlink(missing_ok=True)
+
+    def create_large_zip(self, archivable_dir_path: str) -> Path:
+        archivable_dir = Path(archivable_dir_path)
+        self._zip_path = self.make_zip_in_tmp_dir(archivable_dir)
+        self.write_from_dir_to_zip(archivable_dir, self._zip_path)
+        return self._zip_path
+from path_explorator import DirectoryActor
+
+
+class StorageWriter(DirectoryActor):
+    def __init__(self, root_dir):
+        super().__init__(root_dir)from .path_validator import PathValidEnsurer
+from .path_creator import PathJoiner
+from .logger import Logger
+from .text_encoding import get_encoded_string
+from .path_cutter import PathCutter
+from .time_handler import TimeHandler
+from .hasher import Hasherfrom exceptions import APIPathGoesBeyondLimits
+from path_explorator import PathGoesBeyondLimits, EntityDoesNotExists, PathValidator
+from interfaces import IPathCutter
+
+
+class PathValidEnsurer(PathValidator):
+    def __init__(self, storage_path, path_cutter):
+        self.path_cutter: IPathCutter = path_cutter
+        super().__init__(storage_path)
+
+    def raise_if_goes_beyond_limits(self, user_id, requesting_path: str):
+        if self.is_goes_beyond_limits(requesting_path):
+            raise PathGoesBeyondLimits(requesting_path)
+        if not int(self.path_cutter.get_user_id_part(requesting_path)) == user_id:
+            raise PathGoesBeyondLimits(requesting_path)
+
+    def raise_if_entity_dont_exists(self, path:str):
+        if not self.is_exists(path):
+            raise EntityDoesNotExists(path)
+
+    def raise_if_path_invalid(self, path:str):
+        self.raise_if_goes_beyond_limits(path)
+        self.raise_if_entity_dont_exists(path)
+
+    def ensure_path_safety_on_endpoint_level(self, user_id, abs_path, path_in_storage):
+        try:
+            self.raise_if_goes_beyond_limits(abs_path, path_in_storage)
+        except PathGoesBeyondLimits:
+            raise APIPathGoesBeyondLimits(path_in_storage)
+
+
+class Logger:
+
+    def __init__(self):
+        self.red_log = "\033[1;31mLOG\033[0m"
+
+    def log(self, exception):
+        print(f'{self.red_log}{exception}{self.red_log}')
+
+    def decor_log(self, func):
+        def wrapper(*args, **kwargs):
+            try:
+                result = func(*args, **kwargs)
+                return result
+            except Exception as e:
+                Logger.log(e)
+        return wrapper
+from urllib.parse import quote
+
+
+def get_encoded_string(string):
+    return quote(string)
+
+from path_explorator import PathCreator
+
+
+class PathJoiner(PathCreator):
+    def __init__(self, root_path):
+        self.root_path = root_path
+        super().__init__()
+
+    @property
+    def root(self):
+        return self.root_path
+
+    def join_with_root_path(self, path:str | int):
+        if isinstance(path, int):
+            path = str(path)
+        return self.join_paths(self.root_path, path)
+
+    def create_absolute_path(self, user_id, entity_path_in_storage):
+        if entity_path_in_storage == None:
+            entity_path_in_storage = ''
+        user_id = str(user_id)
+        path_in_storage_with_id = self.join_paths(user_id, entity_path_in_storage)
+        return self.join_with_root_path(path_in_storage_with_id)from exceptions import NotAUserId
+
+class PathCutter:
+
+    def get_user_id_part(self, path:str) -> str:
+        max_split = 1
+        return path.split('/', max_split)[0]
+
+    def cut_user_id_from_storage_path(self, path: str):
+        path = path.lstrip('/') # input path looks like /{id}/folder/file.txt. removing first slash
+        id_part = self.get_user_id_part(path)
+        if not id_part.isdigit():
+            raise NotAUserId(path)
+        return path.removeprefix(id_part)from datetime import datetime
+
+
+print(datetime.astimezone())from datetime import datetime, timedelta
+
+class TimeHandler:
+    def add_days_to_current_date(self, days):
+        time_delta = timedelta(days=days)
+        now = datetime.today()
+        new_date = now + time_delta
+        return new_date
+
+    def is_date_future(self, date):
+        return datetime.now().date() < date
+
+    def get_today_date(self):
+        return datetime.today()
+
+    def get_str_today_date(self):
+        return self.get_today_date().strftime('%d/%m/%Y')from werkzeug.security import generate_password_hash, check_password_hash
+from secrets import token_urlsafe
+
+class Hasher:
+
+    def generate_psw_hash(self, password):
+        return generate_password_hash(password)
+
+    def checK_password(self, password, hashed_psw):
+        return check_password_hash(hashed_psw, password)
+
+    def create_session_id_hash(self):
+        return token_urlsafe(32)
+from .path_http_exc import APIPathGoesBeyondLimits, APIUserStorageAlreadyExists, APIDirectoryAlreadyExists, APIEntityDoesNotExists, APIUnsupportedEntityType
 from .exc import NotAUserId
 from .auth import UserAlreadyExists, UserDontExists, IncorrectPassword, SessionExpired, SessionDontExists
 from .auth_http_exc import APIUserAlreadyExists, APIUserDontExists, APIIncorrectPassword, APISessionDontExists, APISessionExpired, APIUnauthorized
 from .config_exc import StoragePathIsNone, DatabaseUrlIsNone, CacheHostIsNone, CachePortIsNone, CacheExpireTimeIsNone, SessionMakerKeyIsNone
-from .path_exc import EntityDoesNotExists, EntityIsNotADir
-from .http_files_exc import APITooManyFilesclass StoragePathIsNone(Exception):
-    def __init__(self):
-        msg = 'STORAGE_PATH value from .env file is None. Must be filled'
-        super().__init__(msg)
-
-class DatabaseUrlIsNone(Exception):
-    def __init__(self):
-        msg = 'DATABASE_URL value from .env file is None. Must be filled'
-        super().__init__(msg)
-
-class CachePortIsNone(Exception):
-    def __init__(self):
-        msg = 'CACHE_PORT value from .env file is None. Must be filled'
-        super().__init__(msg)
-
-class CacheHostIsNone(Exception):
-    def __init__(self):
-        msg = 'CACHE_HOST value from .env file is None. Must be filled'
-        super().__init__(msg)
-
-class CacheExpireTimeIsNone(Exception):
-    def __init__(self):
-        msg = 'CACHE_EXPIRE_TIME value from .env file is None. Must be filled'
-        super().__init__(msg)
-
-class SessionMakerKeyIsNone(Exception):
-    def __init__(self):
-        msg = 'SESSION_MAKER_KEY value from .env file is None. Must be filled'
+from .path_exc import EntityDoesNotExistsclass NotAUserId(Exception):
+    def __init__(self, path:str):
+        msg = f'path {path} dont starts with user_id. Must look like \'1/folder/file.txt\''
         super().__init__(msg)class UserAlreadyExists(Exception):
     def __init__(self, name):
         msg = f'User with name {name} already exists'
@@ -63,7 +200,39 @@ class SessionExpired(Exception):
 
 class SessionDontExists(Exception):
     def __init__(self):
-        super().__init__()from fastapi.exceptions import HTTPException
+        super().__init__()from fastapi import HTTPException
+
+class APIPathGoesBeyondLimits(HTTPException):
+    def __init__(self, path_in_storage, detail=None, status_code=403):
+        if not detail:
+            detail = {"message": f'path {path_in_storage} is goes beyond limits', "code": 'path_goes_beyond_limits'}
+        super().__init__(status_code=status_code, detail=detail)
+
+class APIEntityDoesNotExists(HTTPException):
+    def __init__(self, path_in_storage, detail=None, status_code=404):
+        if not detail:
+            detail = {"message": f'entity at {path_in_storage} does not exists', "code": 'entity_does_not_exists'}
+        super().__init__(status_code=status_code, detail=detail)
+
+class APIUnsupportedEntityType(HTTPException):
+    def __init__(self, entity_path_in_storage, detail=None, status_code=415):
+        if not detail:
+            detail = {"message":f'unsupported entity type {entity_path_in_storage}', "code":'unsupported_entity_type'}
+        super().__init__(status_code, detail)
+
+class APIUserStorageAlreadyExists(HTTPException):
+    def __init__(self):
+        status_code=409
+        detail = {"message": 'Storage for this user already exists. Failed to create new storage', "code": 'user_storage_already_exists'}
+        super().__init__(status_code, detail)
+
+class APIDirectoryAlreadyExists(HTTPException):
+    def __init__(self, path):
+        status_code = 409
+        detail = {"message": f'Directory at {path} already exists', "code":'diractory_already_exists'}
+        super().__init__(status_code, detail)
+
+from fastapi.exceptions import HTTPException
 
 
 class APIUserAlreadyExists(HTTPException):
@@ -100,51 +269,427 @@ class APIUnauthorized(HTTPException):
     def __init__(self):
         detail = {"message": f'you have to log in to see this page', "code": 'unauthorized'}
         status_code = 401
-        super().__init__(status_code, detail)from fastapi import HTTPException
-
-class APIPathGoesBeyondLimits(HTTPException):
-    def __init__(self, path_in_storage, detail=None, status_code=403):
-        if not detail:
-            detail = {"message": f'path {path_in_storage} is goes beyond limits', "code": 'path_goes_beyond_limits'}
-        super().__init__(status_code=status_code, detail=detail)
-
-class APIEntityDoesNotExists(HTTPException):
-    def __init__(self, path_in_storage, detail=None, status_code=404):
-        if not detail:
-            detail = {"message": f'entity at {path_in_storage} does not exists', "code": 'entity_does_not_exists'}
-        super().__init__(status_code=status_code, detail=detail)
-
-class APIUnsupportedEntityType(HTTPException):
-    def __init__(self, entity_path_in_storage, detail=None, status_code=415):
-        if not detail:
-            detail = {"message":f'unsupported entity type {entity_path_in_storage}', "code":'unsupported_entity_type'}
-        super().__init__(status_code, detail)
-
-class APIUserStorageAlreadyExists(HTTPException):
+        super().__init__(status_code, detail)class StoragePathIsNone(Exception):
     def __init__(self):
-        status_code=409
-        detail = {"message": 'Storage for this user already exists. Failed to create new storage', "code": 'user_storage_already_exists'}
-        super().__init__(status_code, detail)
+        msg = 'STORAGE_PATH value from .env file is None. Must be filled'
+        super().__init__(msg)
 
-class APIDirectoryAlreadyExists(HTTPException):
-    def __init__(self, path):
-        status_code = 409
-        detail = {"message": f'Directory at {path} already exists', "code":'diractory_already_exists'}
-        super().__init__(status_code, detail)
+class DatabaseUrlIsNone(Exception):
+    def __init__(self):
+        msg = 'DATABASE_URL value from .env file is None. Must be filled'
+        super().__init__(msg)
 
-from path_explorator.exceptions import EntityDoesNotExists, EntityIsNotADirfrom http.client import responses
+class CachePortIsNone(Exception):
+    def __init__(self):
+        msg = 'CACHE_PORT value from .env file is None. Must be filled'
+        super().__init__(msg)
 
-from fastapi import UploadFile
+class CacheHostIsNone(Exception):
+    def __init__(self):
+        msg = 'CACHE_HOST value from .env file is None. Must be filled'
+        super().__init__(msg)
+
+class CacheExpireTimeIsNone(Exception):
+    def __init__(self):
+        msg = 'CACHE_EXPIRE_TIME value from .env file is None. Must be filled'
+        super().__init__(msg)
+
+class SessionMakerKeyIsNone(Exception):
+    def __init__(self):
+        msg = 'SESSION_MAKER_KEY value from .env file is None. Must be filled'
+        super().__init__(msg)from path_explorator.exceptions import EntityDoesNotExistsfrom .file_response_handler import FileResponseHandler
+from .upload_handler import UploadFileHandler
+from .storage_view_handler import StorageViewHandler
+from .sign_up_handler import SignUpHandler
+from .auth_handler import AuthHandler
+from .make_dir_handler import MakeDirHandler
+from .logout_handler import  LogOutHandlerfrom fastapi.responses import FileResponse
+from fastapi import HTTPException
+from interfaces import IStorageReader, IArchivator, ILogger, IPathValidator
+from exceptions import APIPathGoesBeyondLimits, APIEntityDoesNotExists, APIUnsupportedEntityType
+from path_explorator import EntityDoesNotExists, PathGoesBeyondLimits
+from utils import get_encoded_string
+
+
+class FileResponseHandler:
+    def __init__(self, archivator, storage_reader, logger, path_validator):
+        self.archivator: IArchivator = archivator
+        self.storage_reader: IStorageReader = storage_reader
+        self.logger: ILogger = logger
+        self.validator: IPathValidator = path_validator
+        self.encode_string = get_encoded_string
+
+    def _make_response(self, path_to_entity):
+        try:
+            str_path_to_entity = path_to_entity.__str__()
+            entity_name = self.storage_reader.get_name(str_path_to_entity)
+            encoded_entity_name = self.encode_string(entity_name)
+            return FileResponse(path_to_entity,
+                                filename=f'{entity_name}',
+                                headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_entity_name}"},
+    )
+        except Exception as e:
+            self.logger.log(e)
+            raise e
+
+    def get_zip_file_response(self, absolute_path_dir):
+        try:
+            zip_path = self.archivator.create_large_zip(absolute_path_dir)
+            return self._make_response(zip_path)
+        except Exception as e:
+            self.logger.log(e)
+
+    def get_file_response(self, absolute_path_file):
+        return self._make_response(absolute_path_file)
+
+    def ensure_path_valid_or_httpexception(self, absolute_path, entity_path_in_storage):
+        try:
+            self.validator.raise_if_path_invalid(absolute_path)
+        except PathGoesBeyondLimits:
+            raise APIPathGoesBeyondLimits(entity_path_in_storage)
+        except EntityDoesNotExists:
+            raise APIEntityDoesNotExists(entity_path_in_storage)
+
+    def get_response(self, absolute_entity_path, entity_path_in_storage):
+        self.ensure_path_valid_or_httpexception(absolute_entity_path, entity_path_in_storage)
+        if self.storage_reader.is_dir(absolute_entity_path):
+            return self.get_zip_file_response(absolute_entity_path)
+        if self.storage_reader.is_file(absolute_entity_path):
+            return self.get_file_response(absolute_entity_path)
+        else:
+            raise APIUnsupportedEntityType(entity_path_in_storage=entity_path_in_storage)
+
+from exceptions import APIEntityDoesNotExists
+from interfaces import IPathValidator, ILogger, IStorageWriter
+
+class UploadFileHandler:
+    def __init__(self, storage_writer, validator, logger):
+        self.storage_writer: IStorageWriter = storage_writer
+        self.validator: IPathValidator = validator
+        self.logger: ILogger = logger
+
+    def join_abs_fpath_and_fname(self, abs_path, fname):
+        return f'{abs_path}/{fname}'
+
+    async def _iterate_and_save_files_to_storage(self, files: list, output_path):
+        try:
+            for file in files:
+                abs_file_path_and_name = self.join_abs_fpath_and_fname(output_path, file.filename)
+                await self.storage_writer.async_write_from_fastapi_uploadfile_to_file(file, abs_file_path_and_name)
+        except FileNotFoundError:
+            raise APIEntityDoesNotExists(output_path)
+        except Exception as e:
+            self.logger.log(e)
+            raise e
+
+    async def save_files_to_storage(self, absolute_path, files: list):
+        await self._iterate_and_save_files_to_storage(files, absolute_path)
+
+from exceptions import APIEntityDoesNotExists, EntityDoesNotExists
+from interfaces import ILogger, IStorageReader, IPathJoiner, IPathCutter
+
+
+class StorageViewHandler:
+    def __init__(self, storage_reader, logger, path_joiner, path_cutter):
+        self.storage_reader: IStorageReader = storage_reader
+        self.logger: ILogger = logger
+        self.path_joiner: IPathJoiner = path_joiner
+        self.path_cutter: IPathCutter = path_cutter
+
+    def _get_abs_path(self, user_id, path_to_dir):
+        path_with_user_id = self.path_joiner.join_paths(user_id, path_to_dir)
+        return self.storage_reader.join_with_root_path(path_with_user_id)
+
+    def _cut_user_id_from_entitynames(self, entities: list[str]):
+        cut_entities = [self.path_cutter.cut_user_id_from_storage_path(entity) for entity in entities]
+        return cut_entities
+
+    def _get_all_entitynames_in_dir(self, abs_dir_path):
+        entitynames = self.storage_reader.get_all_entitynames_in_dir(abs_dir_path)
+        return self._cut_user_id_from_entitynames(entitynames)
+
+    def get_list_of_entities(self, abs_path, path_in_storage):
+        try:
+            entitynames = self._get_all_entitynames_in_dir(abs_path)
+            return entitynames
+        except EntityDoesNotExists:
+            raise APIEntityDoesNotExists(path_in_storage)
+
+        except Exception as e:
+            self.logger.log(e)
+from exceptions import APIUserAlreadyExists, UserAlreadyExists, APIUserStorageAlreadyExists
+from interfaces import IStorageWriter
+
+class SignUpHandler:
+    def __init__(self, user_registrator, storage_writer, user_reader):
+        self.user_registrator = user_registrator
+        self.storage_writer: IStorageWriter = storage_writer
+        self.user_reader = user_reader
+
+
+    def sign_up(self, params):
+        try:
+            self.user_registrator.create_user(params.name, params.password)
+            user = self.user_reader.get_by_kwargs(name = params.name)
+            self.create_user_dir(user.id)
+        except UserAlreadyExists:
+            raise APIUserAlreadyExists(params.name)
+
+    def create_user_dir(self, user_id):
+        try:
+            self.storage_writer.create_dir('', str(user_id), exist_ok=False)
+        except FileExistsError:
+            raise APIUserStorageAlreadyExistsfrom fastapi import Response
+
+from exceptions import APIIncorrectPassword, APIUserDontExists, IncorrectPassword, UserDontExists, APIUnauthorized, APISessionDontExists, APISessionExpired, SessionExpired, SessionDontExists
+from config import SESSION_COOKIES_EXPIRE_TIME
+
+class AuthHandler:
+    def __init__(self, authenticator):
+        self.authenticator = authenticator
+
+    def set_session_id_cookie(self, session_id, response: Response):
+        response.set_cookie(key="session_id", value=session_id, max_age=SESSION_COOKIES_EXPIRE_TIME,
+                            samesite='lax', httponly=True)
+
+    def auth_with_psw_and_set_session_cookie(self, name, password, response: Response):
+        try:
+            session_id = self.authenticator.make_session_by_name_and_psw(name, password)
+            self.set_session_id_cookie(session_id, response)
+        except IncorrectPassword:
+            raise APIIncorrectPassword(password)
+        except UserDontExists:
+            raise APIUserDontExists(name)
+
+    def auth_with_session_id(self, session_id):
+        try:
+            if session_id is None:
+                raise APIUnauthorized
+            return self.authenticator.auth_by_session_id(session_id)
+
+        except SessionExpired:
+            raise APISessionExpired
+        except SessionDontExists:
+            raise APISessionDontExists
+
+from interfaces import IStorageWriter
+from exceptions import APIDirectoryAlreadyExists
+
+
+class MakeDirHandler():
+    def __init__(self, logger, storage_writer):
+        self.logger = logger
+        self.storage_writer: IStorageWriter = storage_writer
+
+    def make_dir_in_storage(self, path, name):
+        if path is None:
+            path = ''
+        try:
+            self.storage_writer.create_dir(path, name)
+        except FileExistsError:
+            raise APIDirectoryAlreadyExistsfrom fastapi import Request, Response
+
+
+class LogOutHandler:
+    def __init__(self, session_deleter, logger):
+        self.session_deleter = session_deleter
+        self.logger = logger
+
+    def logout_user(self, request: Request, response: Response):
+        try:
+            session_id = request.cookies.get('session_id')
+            if session_id is None:
+                return
+            response.delete_cookie('session_id')
+            self.session_deleter.delete_session(session_id)
+        except Exception as e:
+            self.logger.log(e)
+            raise e
+from .interfaces import IArchivator, IPathValidator, IStorageReader, IStorageWriter, ILogger, IPathJoiner, IPathCutter, IModelReader, IModelActor, ITimeHandlerfrom typing import Callable
+from abc import ABC, abstractmethod
+
+class IStorageReader(ABC):
+    @abstractmethod
+    def get_name(self,path:str) -> str: pass
+    @abstractmethod
+    def is_dir(self, path:str) -> bool: pass
+    @abstractmethod
+    def is_file(self, path:str) -> bool: pass
+    @abstractmethod
+    def join_with_root_path(self, path:str) -> str: pass
+    @abstractmethod
+    def get_all_entitynames_in_dir(self, path: str) -> list[str]: pass
+
+class IStorageWriter(ABC):
+    @abstractmethod
+    async def async_write_from_fastapi_uploadfile_to_file(self, source_file, output_file_path:str) -> None: pass
+    @abstractmethod
+    def create_dir(self, path: str, name: str, exist_ok=True): pass
+    @abstractmethod
+    def create_file(self, path: str, name: str, exist_ok=True): pass
+
+class IArchivator(ABC):
+    @abstractmethod
+    def create_large_zip(self, path: str) -> str: pass
+
+class IPathValidator(ABC):
+    @abstractmethod
+    def raise_if_path_invalid(self, path:str) -> None: pass
+    @abstractmethod
+    def raise_if_goes_beyond_limits(self, path:str) -> None: pass
+    @abstractmethod
+    def is_goes_beyond_limits(self, path:str) -> bool: pass
+    @abstractmethod
+    def is_exists(self, path:str) -> bool: pass
+
+class IPathJoiner(ABC):
+    @abstractmethod
+    def join_paths(self, path1: str, path2: str) -> str: pass
+
+class ILogger(ABC):
+    @abstractmethod
+    def log(self, exception) -> None: pass
+    @abstractmethod
+    def decor_log(self, func) -> Callable: pass
+
+class IPathCutter(ABC):
+    @abstractmethod
+    def cut_user_id_from_storage_path(self, path) -> str: pass
+    @abstractmethod
+    def get_user_id_part(self, path)-> str: pass
+
+class IModelReader(ABC):
+    @abstractmethod
+    def get_by_id(self, id: int): pass
+    @abstractmethod
+    def get_by_kwargs(self, **kwargs): pass
+    @abstractmethod
+    def does_record_with_kwargs_exists(self, **kwargs) -> bool: pass
+
+
+class IModelActor(ABC):
+    @abstractmethod
+    def create_and_write_record_to_db(self, **kwargs): pass
+    @abstractmethod
+    def create_record(self, **kwargs): pass
+    @abstractmethod
+    def write_record_to_db(self, record): pass
+    @abstractmethod
+    def delete_record_by_kwargs(self, **kwargs): pass
+    @abstractmethod
+    def delete_record_by_id(self, id): pass
+
+class ITimeHandler(ABC):
+    @abstractmethod
+    def is_date_future(self, date) -> bool: pass
+    @abstractmethod
+    def add_days_to_current_date(self, days) -> object: pass
+    @abstractmethod
+    def get_today_date(self) -> object: pass
+    @abstractmethod
+    def get_str_today_date(self) -> str: passfrom .models import User, Sessionfrom sqlalchemy import Column, Integer, String, Boolean, create_engine, Date, ForeignKey
+from sqlalchemy.orm import declarative_base
+
+from config import DATABASE_URL
+
+engine = create_engine(DATABASE_URL)
+
+
+Base = declarative_base()
+
+
+class User(Base):
+
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    password = Column(String(255))
+    name = Column(String(30), unique=True)
+    is_admin = Column(Boolean, default=False)
+    owning_dir_id = Column(Integer, unique=True)
+
+class Session(Base):
+    __tablename__ = "sessions"
+
+    id = Column(String(50), primary_key=True)
+    user_id = Column(Integer, ForeignKey(User.id))
+    expire_date = Column(Date)
+
+Base.metadata.create_all(bind=engine)
+
+from dotenv import load_dotenv
+from os import getenv
+from exceptions import StoragePathIsNone, DatabaseUrlIsNone, SessionMakerKeyIsNone, CachePortIsNone, CacheHostIsNone, CacheExpireTimeIsNone
+
+load_dotenv('.env')
+
+STORAGE_PATH = getenv('STORAGE_PATH')
+DATABASE_URL = getenv('DATABASE_URL')
+SESSION_EXPIRE_TIME = getenv('SESSION_EXPIRE_TIME')
+SESSION_COOKIES_EXPIRE_TIME = getenv('SESSION_COOKIES_EXPIRE_TIME')
+SESSION_MAKER_KEY = getenv('SESSION_MAKER_KEY')
+CACHE_HOST = getenv('CACHE_HOST')
+CACHE_PORT = int(getenv('CACHE_PORT'))
+CACHE_EXPIRE_TIME = getenv('CACHE_EXPIRE_TIME')
+
+
+if STORAGE_PATH is None:
+    raise StoragePathIsNone
+if DATABASE_URL is None:
+    raise DatabaseUrlIsNone
+if SESSION_MAKER_KEY is None:
+    raise SessionMakerKeyIsNone
+if CACHE_HOST is None:
+    raise CacheHostIsNone
+if CACHE_PORT is None:
+    raise CachePortIsNone
+if CACHE_EXPIRE_TIME is None:
+    raise CacheExpireTimeIsNone
+from .view_storage import ViewStorageRootQuery, ViewStorageQuery
+from .upload import UploadQuery, MakeDirInStorageQuery
+from .download import DownloadQuery
+from .auth import SignUpQuery, AuthenticateQueryfrom pydantic import BaseModel, Field
+
+class ViewStorageRootQuery(BaseModel):
+    user_id: int = Field(ge=0)
+
+class ViewStorageQuery(BaseModel):
+    user_id: int = Field(ge=0)
+from pydantic import BaseModel, Field
+
+
+class DownloadQuery(BaseModel):
+    entity_path_in_storage: str
+from pydantic import BaseModel, Field
+
+
+class UploadQuery(BaseModel):
+    path_in_storage: str | None = None
+
+class MakeDirInStorageQuery(BaseModel):
+    path_in_storage: str | None = None
+    name: str
+
+from pydantic import BaseModel, Field
+
+
+class SignUpQuery(BaseModel):
+    name: str = Field(max_length=16, min_length=1)
+    password: str = Field(max_length=255)
+
+class AuthenticateQuery(BaseModel):
+    name: str
+    password: strfrom .storage_view import ViewStorageResponsefrom pydantic import BaseModel
+from typing import List
+
+
+class ViewStorageResponse(BaseModel):
+    entities: listfrom fastapi import UploadFile
 from fastapi.testclient import TestClient
 
 
 from main import app
 client = TestClient(app)
-
-def test_sign_in():
-    params = {'name': 'tester1', 'password': '123'}
-    response = client.post('/log-in', params=params)
-    assert response.status_code == 200
 
 def test_view_root_storage():
     url = '/storage'
@@ -255,527 +800,58 @@ def test_ensurer_goes_beyond_limits():
     is_unsafe_rel = ensurer.is_goes_beyond_limits(beyond_rel_path)
     is_safe = not ensurer.is_goes_beyond_limits(safe_path)
     assert is_unsafe == is_unsafe_rel == is_safe == True
-from .auth import AuthDependfrom fastapi import Request
-
-
-class AuthDepend:
-    def __init__(self, auth_handler):
-        self.auth_handler = auth_handler
-
-    def auth(self, request: Request):
-        session_id = request.cookies.get('session_id')
-        return self.auth_handler.auth_with_session_id(session_id)
-from dotenv import load_dotenv
-from os import getenv
-
-load_dotenv('.env')
-
-STORAGE_PATH = getenv('STORAGE_PATH')
-DATABASE_URL = getenv('DATABASE_URL')
-SESSION_EXPIRE_TIME = getenv('SESSION_EXPIRE_TIME_DAYS')
-SESSION_COOKIES_EXPIRE_TIME = getenv('SESSION_COOKIES_EXPIRE_TIME_SECONDS')
-CACHE_HOST = getenv('CACHE_HOST')
-CACHE_PORT = int(getenv('CACHE_PORT'))
-CACHE_EXPIRE_TIME = getenv('CACHE_EXPIRE_TIME_SECONDS')
-
-
-assert STORAGE_PATH is not None
-assert DATABASE_URL is not None
-assert SESSION_EXPIRE_TIME is not None
-assert SESSION_COOKIES_EXPIRE_TIME is not None
-assert CACHE_PORT is not None
-assert CACHE_HOST is not None
-assert CACHE_EXPIRE_TIME is not Nonefrom .reader import ModelReader
-from .actor import ModelActorfrom .parent_access import ParentAccess
-
-class ModelActor(ParentAccess):
-    def __init__(self, model, logger):
-        super().__init__(model, logger)
-
-    def create_and_write_record_to_db(self, **kwargs):
-        record = self.create_record(**kwargs)
-        self.write_record_to_db(record)
-
-    def write_record_to_db(self, record):
-        session = self.session()
-        try:
-            session.add(record)
-            session.commit()
-        finally:
-            session.close()
-
-    def create_record(self, **kwargs):
-        try:
-            return self.model(**kwargs)
-        except Exception as e:
-            self.logger.log(e)
-
-    def delete_record_by_id(self, id):
-        session = self.session()
-        try:
-            session.query(self.model).filter_by(id=id).delete()
-            session.commit()
-        except Exception as e:
-            self.logger.log(e)
-            session.rollback()
-        finally:
-            session.close()
-
-    def delete_record_by_kwargs(self, **kwargs):
-        session = self.session()
-        try:
-            session.query(self.model).filter_by(**kwargs).delete()
-            session.commit()
-        except Exception as e:
-            self.logger.log(e)
-            session.rollback()
-        finally:
-            session.close()from sqlalchemy.orm import sessionmaker
-from alchemy.models import engine
-
-class ParentAccess:
-    def __init__(self, model, logger):
-        self.session = sessionmaker(engine)
-        self.model = model
-        self.logger = loggerfrom sqlalchemy.orm import Session
-
-from .parent_access import ParentAccess
-
-class ModelReader(ParentAccess):
-    def __init__(self, model, logger):
-        super().__init__(model, logger)
-
-    def get_by_id(self, id):
-        session = self.session()
-        try:
-            return session.query(self.model).filter_by(id=id).first()
-        except Exception as e:
-            self.logger.log(e)
-        finally:
-            session.close()
-
-    def get_by_kwargs(self, **kwargs):
-        session = self.session()
-        try:
-             return session.query(self.model).filter_by(**kwargs).first()
-        except Exception as e:
-            self.logger.log(e)
-        finally:
-            session.close()
-
-    def does_record_with_id_exists(self, id):
-        session: Session = self.session()
-        try:
-            return session.query(self.model).filter_by(id=id).exists()
-        except Exception as e:
-            self.logger.log(e)
-        finally:
-            session.close()
-
-    def does_record_with_kwargs_exists(self, **kwargs):
-        session = self.session()
-        try:
-            return session.query(self.model).filter_by(**kwargs).exists()
-        except Exception as e:
-            self.logger.log(e)
-        finally:
-            session.close()from .interfaces import IArchivator, IPathValidator, IStorageReader, IStorageWriter, ILogger, IPathJoiner, IPathCutter, IModelReader, IModelActor, ITimeHandlerfrom typing import Callable
-from abc import ABC, abstractmethod
-
-class IStorageReader(ABC):
-    @abstractmethod
-    def get_name(self,path:str) -> str: pass
-    @abstractmethod
-    def is_dir(self, path:str) -> bool: pass
-    @abstractmethod
-    def is_file(self, path:str) -> bool: pass
-    @abstractmethod
-    def join_with_root_path(self, path:str) -> str: pass
-    @abstractmethod
-    def get_all_entitynames_in_dir(self, path: str) -> list[str]: pass
-
-class IStorageWriter(ABC):
-    @abstractmethod
-    async def async_write_from_fastapi_uploadfile_to_file(self, source_file, output_file_path:str) -> None: pass
-    @abstractmethod
-    def create_dir(self, path: str, name: str, exist_ok=True): pass
-    @abstractmethod
-    def create_file(self, path: str, name: str, exist_ok=True): pass
-
-class IArchivator(ABC):
-    @abstractmethod
-    def create_large_zip(self, path: str) -> str: pass
-
-class IPathValidator(ABC):
-    @abstractmethod
-    def raise_if_path_invalid(self, path:str) -> None: pass
-    @abstractmethod
-    def raise_if_goes_beyond_limits(self, path:str) -> None: pass
-    @abstractmethod
-    def is_goes_beyond_limits(self, path:str) -> bool: pass
-    @abstractmethod
-    def is_exists(self, path:str) -> bool: pass
-
-class IPathJoiner(ABC):
-    @abstractmethod
-    def join_paths(self, path1: str, path2: str) -> str: pass
-
-class ILogger(ABC):
-    @abstractmethod
-    def log(self, exception) -> None: pass
-    @abstractmethod
-    def decor_log(self, func) -> Callable: pass
-
-class IPathCutter(ABC):
-    @abstractmethod
-    def get_user_id_from_rel_path(self, path:str) -> str: pass
-    @abstractmethod
-    def get_user_id_from_abs_path(self, path: str) -> str: pass
-    @abstractmethod
-    def remove_id_from_rel_path(self, path: str) -> str: pass
-class IModelReader(ABC):
-    @abstractmethod
-    def get_by_id(self, id: int): pass
-    @abstractmethod
-    def get_by_kwargs(self, **kwargs): pass
-    @abstractmethod
-    def does_record_with_kwargs_exists(self, **kwargs) -> bool: pass
-
-
-class IModelActor(ABC):
-    @abstractmethod
-    def create_and_write_record_to_db(self, **kwargs): pass
-    @abstractmethod
-    def create_record(self, **kwargs): pass
-    @abstractmethod
-    def write_record_to_db(self, record): pass
-    @abstractmethod
-    def delete_record_by_kwargs(self, **kwargs): pass
-    @abstractmethod
-    def delete_record_by_id(self, id): pass
-
-class ITimeHandler(ABC):
-    @abstractmethod
-    def is_date_future(self, date) -> bool: pass
-    @abstractmethod
-    def add_days_to_current_date(self, days) -> object: pass
-    @abstractmethod
-    def get_today_date(self) -> object: pass
-    @abstractmethod
-    def get_str_today_date(self) -> str: passfrom fastapi import Response
-
-from exceptions import APIIncorrectPassword, APIUserDontExists, IncorrectPassword, UserDontExists, APIUnauthorized, APISessionDontExists, APISessionExpired, SessionExpired, SessionDontExists
-from config import SESSION_COOKIES_EXPIRE_TIME
-
-class AuthHandler:
-    def __init__(self, authenticator):
-        self.authenticator = authenticator
-
-    def set_session_id_cookie(self, session_id, response: Response):
-        response.set_cookie(key="session_id", value=session_id, max_age=SESSION_COOKIES_EXPIRE_TIME,
-                            samesite='lax', httponly=True)
-
-    def auth_with_psw_and_set_session_cookie(self, name, password, response: Response):
-        try:
-            session_id = self.authenticator.make_session_by_name_and_psw(name, password)
-            self.set_session_id_cookie(session_id, response)
-        except IncorrectPassword:
-            raise APIIncorrectPassword(password)
-        except UserDontExists:
-            raise APIUserDontExists(name)
-
-    def auth_with_session_id(self, session_id):
-        try:
-            if session_id is None:
-                raise APIUnauthorized
-            return self.authenticator.auth_by_session_id(session_id)
-
-        except SessionExpired:
-            raise APISessionExpired
-        except SessionDontExists:
-            raise APISessionDontExists
-
-from fastapi.responses import FileResponse
-from fastapi import HTTPException
-from interfaces import IStorageReader, IArchivator, ILogger, IPathValidator
-from exceptions import APIPathGoesBeyondLimits, APIEntityDoesNotExists, APIUnsupportedEntityType
-from path_explorator import EntityDoesNotExists, PathGoesBeyondLimits
-from utils import get_encoded_string
-
-
-class FileResponseHandler:
-    def __init__(self, archivator, storage_reader, logger, path_validator):
-        self.archivator: IArchivator = archivator
-        self.storage_reader: IStorageReader = storage_reader
-        self.logger: ILogger = logger
-        self.ensurer = path_validator
-        self.encode_string = get_encoded_string
-
-    def _make_response(self, path_to_entity):
-        try:
-            str_path_to_entity = path_to_entity.__str__()
-            entity_name = self.storage_reader.get_name(str_path_to_entity)
-            encoded_entity_name = self.encode_string(entity_name)
-            return FileResponse(path_to_entity,
-                                filename=f'{entity_name}',
-                                headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_entity_name}"},
-    )
-        except Exception as e:
-            self.logger.log(e)
-            raise e
-
-    def get_zip_file_response(self, absolute_path_dir):
-        try:
-            zip_path = self.archivator.create_large_zip(absolute_path_dir)
-            return self._make_response(zip_path)
-        except Exception as e:
-            self.logger.log(e)
-
-    def get_file_response(self, absolute_path_file):
-        return self._make_response(absolute_path_file)
-
-
-    def get_response(self, user_id, entity_path_in_storage):
-        self.ensurer.ensure_path_safety(str(user_id), entity_path_in_storage)
-        if not self.ensurer.is_exists(entity_path_in_storage):
-            raise EntityDoesNotExists
-        if self.storage_reader.is_dir(entity_path_in_storage):
-            return self.get_zip_file_response(entity_path_in_storage)
-        if self.storage_reader.is_file(entity_path_in_storage):
-            return self.get_file_response(entity_path_in_storage)
-        else:
-            raise APIUnsupportedEntityType(entity_path_in_storage=entity_path_in_storage)
-
-from interfaces import IStorageWriter
-from exceptions import APIDirectoryAlreadyExists
-
-
-class MakeDirHandler():
-    def __init__(self, logger, storage_writer):
-        self.logger = logger
-        self.storage_writer: IStorageWriter = storage_writer
-
-    def make_dir_in_storage(self, path, name):
-        if path is None:
-            path = ''
-        try:
-            self.storage_writer.create_dir(path, name)
-        except FileExistsError:
-            raise APIDirectoryAlreadyExistsfrom .file_response_handler import FileResponseHandler
-from .upload_handler import UploadFileHandler
-from .storage_view_handler import StorageViewHandler
-from .sign_up_handler import SignUpHandler
-from .auth_handler import AuthHandler
-from .make_dir_handler import MakeDirHandler
-from .logout_handler import  LogOutHandlerfrom exceptions import APIEntityDoesNotExists, APITooManyFiles
-from interfaces import IPathValidator, ILogger, IStorageWriter
-
-class UploadFileHandler:
-    def __init__(self, storage_writer, path_ensurer, logger, path_joiner):
-        self.storage_writer: IStorageWriter = storage_writer
-        self.path_ensurer = path_ensurer
-        self.path_joiner = path_joiner
-        self.logger: ILogger = logger
-        self.max_upload_files = 20
-
-    def create_rel_fpath_with_id(self, user_id, rel_path, fname):
-        fpath_and_name = self.join_fpath_and_fname(rel_path, fname)
-        return self.path_joiner.join_paths(user_id, fpath_and_name)
-
-    def join_fpath_and_fname(self, fpath, fname):
-        return f'{fpath}/{fname}'
-
-    async def _iterate_and_save_files_to_storage(self, files: list, output_path, user_id):
-        try:
-            for file in files:
-                rel_fpath_with_id = self.create_rel_fpath_with_id(user_id, output_path, file.filename)
-                await self.storage_writer.async_write_from_fastapi_uploadfile_to_file(file, rel_fpath_with_id)
-        except FileNotFoundError:
-            raise APIEntityDoesNotExists(output_path)
-        except Exception as e:
-            self.logger.log(e)
-            raise e
-
-    async def save_files_to_storage(self, user_id, path_in_storage, files: list):
-        if len(files) > self.max_upload_files:
-            raise APITooManyFiles
-        self.path_ensurer.ensure_path_safety(user_id, path_in_storage)
-        await self._iterate_and_save_files_to_storage(files, path_in_storage, str(user_id))
-
-from fastapi import HTTPException
-
-from exceptions import APIEntityDoesNotExists, EntityDoesNotExists
-from interfaces import ILogger, IStorageReader, IPathJoiner, IPathCutter
-
-
-class StorageViewHandler:
-    def __init__(self, storage_reader, logger, path_joiner, path_cutter, path_ensurer):
-        self.storage_reader: IStorageReader = storage_reader
-        self.path_ensurer = path_ensurer
-        self.logger: ILogger = logger
-        self.path_joiner = path_joiner
-        self.path_cutter: IPathCutter = path_cutter
-
-    def _get_abs_path(self, user_id, path_to_dir):
-        path_with_user_id = self.path_joiner.join_paths(user_id, path_to_dir)
-        return self.storage_reader.join_with_root_path(path_with_user_id)
-
-    def _cut_user_id_from_entitynames(self, entities: list[str]):
-        cut_entities = [self.path_cutter.remove_id_from_rel_path(entity) for entity in entities]
-        return cut_entities
-
-    def _get_all_entitynames_in_dir(self, rel_dir_path):
-        entitynames = self.storage_reader.get_all_entitynames_in_dir(rel_dir_path)
-        print(entitynames)
-        return self._cut_user_id_from_entitynames(entitynames)
-
-    def get_list_of_entities(self, user_id, path_in_storage):
-        try:
-            self.path_ensurer.ensure_path_safety(user_id, path_in_storage)
-            path_in_storage_with_id = self.path_joiner.join_paths(str(user_id), path_in_storage)
-            entitynames = self._get_all_entitynames_in_dir(path_in_storage_with_id)
-            return entitynames
-        except EntityDoesNotExists:
-            raise APIEntityDoesNotExists(path_in_storage)
-
-        except HTTPException as e:
-            raise e
-
-        except Exception as e:
-            self.logger.log(e)
-from fastapi import Request, Response
-
-
-class LogOutHandler:
-    def __init__(self, session_deleter, logger):
-        self.session_deleter = session_deleter
-        self.logger = logger
-
-    def logout_user(self, request: Request, response: Response):
-        try:
-            session_id = request.cookies.get('session_id')
-            if session_id is None:
-                return
-            response.delete_cookie('session_id')
-            self.session_deleter.delete_session(session_id)
-        except Exception as e:
-            self.logger.log(e)
-            raise e
-from exceptions import APIUserAlreadyExists, UserAlreadyExists, APIUserStorageAlreadyExists
-from interfaces import IStorageWriter
-
-class SignUpHandler:
-    def __init__(self, user_registrator, storage_writer, user_reader):
-        self.user_registrator = user_registrator
-        self.storage_writer: IStorageWriter = storage_writer
-        self.user_reader = user_reader
-
-
-    def sign_up(self, params):
-        try:
-            self.user_registrator.create_user(params.name, params.password)
-            user = self.user_reader.get_by_kwargs(name = params.name)
-            self.create_user_dir(user.id)
-        except UserAlreadyExists:
-            raise APIUserAlreadyExists(params.name)
-
-    def create_user_dir(self, user_id):
-        try:
-            self.storage_writer.create_dir('', str(user_id), exist_ok=False)
-        except FileExistsError:
-            raise APIUserStorageAlreadyExistsfrom .cache_handler import MemCacher, RedisCacher
-class Cacher:
-    def __init__(self, client, expire_time):
-        self.client = client
-        self.expire_time = expire_time
-
-    def get_data(self, key):
-        raise NotImplementedError
-
-    def put_data(self, key, value):
-        raise NotImplementedError
-
-    def delete_data(self, key):
-        raise NotImplementedError
-
-class MemCacher(Cacher):
-    def __init__(self, memcache_client, data_expire_time):
-        super().__init__(memcache_client, data_expire_time)
-
-    def get_data(self, key):
-        return self.client.get(key)
-
-    def put_data(self, key, value):
-        self.client.add(key, value, self.expire_time)
-
-    def delete_data(self, key):
-        self.client.delete(key)
-
-class RedisCacher(Cacher):
-    def __init__(self, redis_client, data_expire_time):
-        super().__init__(redis_client, data_expire_time)
-
-    def get_data(self, key):
-        return self.client.get(key)
-
-    def put_data(self, key, value):
-        self.client.set(key, value, ex=self.expire_time, nx=True)
-
-    def delete_data(self, key):
-        self.client.delete(key)
-
-    def is_data_exists(self, key):
-        return self.client.exists(key)from interfaces import IModelActor
-
-
-class SessionDeleter:
-    def __init__(self, cacher, session_actor):
-        self.cacher = cacher
-        self.session_actor: IModelActor = session_actor
-
-    def delete_session(self, session_id):
-        """
-        MAKE SURE YOU DELETE SESSION_ID FROM USER COOKIES!!!
-        :param session_id:
-        :return:
-        """
-        self.cacher.delete_data(session_id)
-        self.session_actor.delete_record_by_id(session_id)from .session_maker import SessionMaker
+from .session_maker import SessionMaker
 from .user_getter import UserGetter
 from .registration import UserRegistration
 from .session_validator import SessionValidator
 from .authentication import UserAuthentication
-from .session_deleter import SessionDeleterfrom exceptions import SessionExpired, SessionDontExists
+from .session_deleter import SessionDeleterfrom exceptions import UserAlreadyExists
+from psycopg2.errors import UniqueViolation
 
-class UserGetter:
-    def __init__(self, user_reader, session_reader, cacher, session_validator):
-        self.session_reader = session_reader
-        self.user_reader = user_reader
+class UserRegistration:
+    def __init__(self,user_actor, hasher, logger):
+        self._user_actor = user_actor
+        self.hasher = hasher
+        self.logger = logger
+
+    def create_user(self, name, password):
+        try:
+            password = self.hasher.generate_psw_hash(password)
+            self._user_actor.create_and_write_record_to_db(name=name, password=password)
+        except UniqueViolation:
+            raise UserAlreadyExists(name)
+        except Exception as e:
+            self.logger.log(e)
+
+from interfaces import IModelActor
+
+class SessionMaker:
+    def __init__(self, session_expire_time, session_access, time_handler, hasher, cacher):
+        self.expire_time = session_expire_time
+        self._access: IModelActor = session_access
+        self.time_handler = time_handler
+        self.hasher = hasher
         self.cacher = cacher
-        self.session_validator = session_validator
 
+    def _get_expire_date(self):
+        return self.time_handler.add_days_to_current_date(self.expire_time)
 
-    def _get_user_from_db(self, user_id):
-        return self.user_reader.get_by_kwargs(id=user_id)
+    def _create_session_id(self):
+        hashed_id = self.hasher.create_session_id_hash()
+        return hashed_id
 
-    def _get_session_from_db(self, id):
-        return self.session_reader.get_by_id(id)
+    def _create_session_obj(self, user_id):
+        session_id = self._create_session_id()
+        expire_date = self._get_expire_date()
+        session_record = self._access.create_record(id=session_id, expire_date=expire_date, user_id=user_id)
+        return session_record
 
-    def _get_user_if_session_not_in_cache(self, session_id):
-        session = self._get_session_from_db(session_id)
-        if not session:
-            raise SessionDontExists
-        self.session_validator.validate_session_or_raise(session)
-        return self._get_user_from_db(session.user_id)
-
-    def get_user_by_session_id(self, session_id):
-        user_id = (self.cacher.get_data(session_id))
-        if not user_id:
-            return self._get_user_if_session_not_in_cache(session_id)
-        user_id = int(user_id)
-        return self._get_user_from_db(user_id)
-
-from interfaces import ITimeHandler
+    def make_session(self, user_id):
+        session = self._create_session_obj(user_id)
+        session_id = session.id
+        self._access.write_record_to_db(session)
+        self.cacher.put_data(session_id, user_id)
+        return session_idfrom interfaces import ITimeHandler
 from exceptions import SessionExpired
 
 class SessionValidator:
@@ -826,95 +902,146 @@ class UserAuthentication:
         return self.user_getter.get_user_by_session_id(session_id)
 
 
+from exceptions import SessionExpired, SessionDontExists
+
+class UserGetter:
+    def __init__(self, user_reader, session_reader, cacher, session_validator):
+        self.session_reader = session_reader
+        self.user_reader = user_reader
+        self.cacher = cacher
+        self.session_validator = session_validator
+
+
+    def _get_user_from_db(self, user_id):
+        return self.user_reader.get_by_kwargs(id=user_id)
+
+    def _get_session_from_db(self, id):
+        return self.session_reader.get_by_id(id)
+
+    def _get_user_if_session_not_in_cache(self, session_id):
+        session = self._get_session_from_db(session_id)
+        if not session:
+            raise SessionDontExists
+        self.session_validator.validate_session_or_raise(session)
+        return self._get_user_from_db(session.user_id)
+
+    def get_user_by_session_id(self, session_id):
+        user_id = (self.cacher.get_data(session_id))
+        if not user_id:
+            return self._get_user_if_session_not_in_cache(session_id)
+        user_id = int(user_id)
+        return self._get_user_from_db(user_id)
+
 from interfaces import IModelActor
 
-class SessionMaker:
-    def __init__(self, session_expire_time, session_access, time_handler, hasher, cacher):
-        self.expire_time = session_expire_time
-        self._access: IModelActor = session_access
-        self.time_handler = time_handler
-        self.hasher = hasher
+
+class SessionDeleter:
+    def __init__(self, cacher, session_actor):
         self.cacher = cacher
+        self.session_actor: IModelActor = session_actor
 
-    def _get_expire_date(self):
-        return self.time_handler.add_days_to_current_date(self.expire_time)
+    def delete_session(self, session_id):
+        """
+        MAKE SURE YOU DELETE SESSION_ID FROM USER COOKIES!!!
+        :param session_id:
+        :return:
+        """
+        self.cacher.delete_data(session_id)
+        self.session_actor.delete_record_by_id(session_id)from .reader import ModelReader
+from .actor import ModelActorfrom sqlalchemy.orm import Session
 
-    def _create_session_id(self):
-        hashed_id = self.hasher.create_session_id_hash()
-        return hashed_id
+from .parent_access import ParentAccess
 
-    def _create_session_obj(self, user_id):
-        session_id = self._create_session_id()
-        expire_date = self._get_expire_date()
-        session_record = self._access.create_record(id=session_id, expire_date=expire_date, user_id=user_id)
-        return session_record
+class ModelReader(ParentAccess):
+    def __init__(self, model, logger):
+        super().__init__(model, logger)
 
-    def make_session(self, user_id):
-        session = self._create_session_obj(user_id)
-        session_id = session.id
-        self._access.write_record_to_db(session)
-        self.cacher.put_data(session_id, user_id)
-        return session_idfrom exceptions import UserAlreadyExists
-from sqlalchemy.exc import IntegrityError
-from psycopg2.errors import UniqueViolation
-
-class UserRegistration:
-    def __init__(self,user_actor, hasher, logger):
-        self._user_actor = user_actor
-        self.hasher = hasher
-        self.logger = logger
-
-    def create_user(self, name, password):
+    def get_by_id(self, id):
+        session = self.session()
         try:
-            password = self.hasher.generate_psw_hash(password)
-            self._user_actor.create_and_write_record_to_db(name=name, password=password)
-        except IntegrityError as integrity_error:
-            if isinstance(integrity_error.orig, UniqueViolation):
-                raise UserAlreadyExists(name)
+            return session.query(self.model).filter_by(id=id).first()
+        except Exception as e:
+            self.logger.log(e)
+        finally:
+            session.close()
+
+    def get_by_kwargs(self, **kwargs):
+        session = self.session()
+        try:
+             return session.query(self.model).filter_by(**kwargs).first()
+        except Exception as e:
+            self.logger.log(e)
+        finally:
+            session.close()
+
+    def does_record_with_id_exists(self, id):
+        session: Session = self.session()
+        try:
+            return session.query(self.model).filter_by(id=id).exists()
+        except Exception as e:
+            self.logger.log(e)
+        finally:
+            session.close()
+
+    def does_record_with_kwargs_exists(self, **kwargs):
+        session = self.session()
+        try:
+            return session.query(self.model).filter_by(**kwargs).exists()
+        except Exception as e:
+            self.logger.log(e)
+        finally:
+            session.close()from .parent_access import ParentAccess
+
+class ModelActor(ParentAccess):
+    def __init__(self, model, logger):
+        super().__init__(model, logger)
+
+    def create_and_write_record_to_db(self, **kwargs):
+        record = self.create_record(**kwargs)
+        self.write_record_to_db(record)
+
+    def write_record_to_db(self, record):
+        session = self.session()
+        try:
+            session.add(record)
+            session.commit()
+        finally:
+            session.close()
+
+    def create_record(self, **kwargs):
+        try:
+            return self.model(**kwargs)
         except Exception as e:
             self.logger.log(e)
 
+    def delete_record_by_id(self, id):
+        session = self.session()
+        try:
+            session.query(self.model).filter_by(id=id).delete()
+            session.commit()
+        except Exception as e:
+            self.logger.log(e)
+            session.rollback()
+        finally:
+            session.close()
 
-from .storage_view import ViewStorageResponsefrom pydantic import BaseModel
-from typing import List
+    def delete_record_by_kwargs(self, **kwargs):
+        session = self.session()
+        try:
+            session.query(self.model).filter_by(**kwargs).delete()
+            session.commit()
+        except Exception as e:
+            self.logger.log(e)
+            session.rollback()
+        finally:
+            session.close()from sqlalchemy.orm import sessionmaker
+from alchemy.models import engine
 
-
-class ViewStorageResponse(BaseModel):
-    entities: listfrom .view_storage import ViewStorageRootQuery, ViewStorageQuery
-from .upload import UploadQuery, MakeDirInStorageQuery
-from .download import DownloadQuery
-from .auth import SignUpQuery, AuthenticateQueryfrom pydantic import BaseModel, Field
-
-
-class DownloadQuery(BaseModel):
-    entity_path_in_storage: str
-from pydantic import BaseModel, Field
-
-class ViewStorageRootQuery(BaseModel):
-    user_id: int = Field(ge=0)
-
-class ViewStorageQuery(BaseModel):
-    user_id: int = Field(ge=0)
-from pydantic import BaseModel, Field
-
-
-class UploadQuery(BaseModel):
-    path_in_storage: str | None = None
-
-class MakeDirInStorageQuery(BaseModel):
-    path_in_storage: str | None = None
-    name: str
-
-from pydantic import BaseModel, Field
-
-
-class SignUpQuery(BaseModel):
-    name: str = Field(max_length=16, min_length=1)
-    password: str = Field(max_length=255)
-
-class AuthenticateQuery(BaseModel):
-    name: str
-    password: strfrom fastapi import FastAPI, UploadFile, BackgroundTasks, Query, Response, Request, Depends
+class ParentAccess:
+    def __init__(self, model, logger):
+        self.session = sessionmaker(engine)
+        self.model = model
+        self.logger = loggerfrom fastapi import FastAPI, UploadFile, BackgroundTasks, Query, Response, Request, Depends
 from redis import Redis
 
 from alchemy import Session, User
@@ -928,18 +1055,18 @@ from schemas.response import ViewStorageResponse
 from cache_handler import RedisCacher
 from db_repository import ModelReader, ModelActor
 from auth import UserRegistration, UserAuthentication, SessionValidator, SessionMaker, UserGetter, SessionDeleter
-
+#TODO refactor alchemy package, refactor db_repository, refactor auth package
 
 app = FastAPI()
 logger = Logger()
 redis_client = Redis(host=CACHE_HOST, port=CACHE_PORT, decode_responses=True)
+storage_reader = StorageReader(STORAGE_PATH)
+storage_writer = StorageWriter(STORAGE_PATH)
 path_joiner = PathJoiner(STORAGE_PATH)
-path_cutter = PathCutter(STORAGE_PATH)
-path_ensurer = PathValidEnsurer(STORAGE_PATH, path_cutter, path_joiner)
+path_cutter = PathCutter()
+path_ensurer = PathValidEnsurer(STORAGE_PATH, path_cutter)
 archivator = Archivator()
 time_handler = TimeHandler()
-storage_reader = StorageReader(STORAGE_PATH, path_joiner, path_cutter)
-storage_writer = StorageWriter(STORAGE_PATH)
 hasher = Hasher()
 redis_cacher = RedisCacher(redis_client, CACHE_EXPIRE_TIME)
 user_reader = ModelReader(User, logger)
@@ -953,8 +1080,8 @@ user_registrator = UserRegistration(user_actor, hasher, logger)
 user_authenticator = UserAuthentication(user_reader, session_maker, user_getter, logger, hasher)
 session_deleter = SessionDeleter(redis_cacher, session_actor)
 file_response_handler = FileResponseHandler(archivator, storage_reader, logger, path_ensurer)
-upload_handler = UploadFileHandler(storage_writer, path_ensurer, logger, path_joiner)
-storage_view_handler = StorageViewHandler(storage_reader, logger, path_joiner, path_cutter, path_ensurer)
+upload_handler = UploadFileHandler(storage_writer, path_ensurer, logger)
+storage_view_handler = StorageViewHandler(storage_reader, logger, path_joiner, path_cutter)
 sign_up_handler = SignUpHandler(user_registrator, storage_writer, user_reader)
 auth_handler = AuthHandler(user_authenticator)
 make_dir_handler = MakeDirHandler(logger, storage_writer)
@@ -964,33 +1091,42 @@ auth_depend = AuthDepend(auth_handler)
 
 
 
+
 @app.get('/storage', response_model=ViewStorageResponse)
-def view_storage_root(entity_path_in_storage = '', user=Depends(auth_depend.auth)):
-    entities = storage_view_handler.get_list_of_entities(user.id, entity_path_in_storage)
+def view_storage_root(user=Depends(auth_depend.auth)):
+    abs_path = path_joiner.join_with_root_path(user.id)
+    path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, user.id, '')
+    entities = storage_view_handler.get_list_of_entities(abs_path, '')
     return {"entities": entities}
 
 
 @app.get('/storage/{entity_path_in_storage:path}', response_model=ViewStorageResponse)
 async def view_storage(entity_path_in_storage: str, user=Depends(auth_depend.auth)):
-    entities = storage_view_handler.get_list_of_entities(user.id, entity_path_in_storage)
+    abs_path = path_joiner.create_absolute_path(user.id, entity_path_in_storage)
+    path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, entity_path_in_storage, entity_path_in_storage)
+    entities = storage_view_handler.get_list_of_entities(abs_path, entity_path_in_storage)
     return {"entities": entities}
 
 @app.get('/download-entity')
 def download_entity_endpoint(background_tasks: BackgroundTasks, params: DownloadQuery = Query(), user=Depends(auth_depend.auth)):
-    response = file_response_handler.get_response(user.id, params.entity_path_in_storage)
+    abs_path = path_joiner.create_absolute_path(user.id, params.entity_path_in_storage)
+    path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, params.entity_path_in_storage, params.entity_path_in_storage)
+    response = file_response_handler.get_response(abs_path, params.entity_path_in_storage)
     background_tasks.add_task(archivator.cleanup_temp_files)
     return response
 
 
 @app.post('/upload-entity')
 async def upload_entity_endpoint(files: list[UploadFile], params: UploadQuery = Query(), user=Depends(auth_depend.auth)):
-    await upload_handler.save_files_to_storage(user.id, params.path_in_storage, files)
+    abs_path = path_joiner.create_absolute_path(user.id, params.path_in_storage)
+    path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, params.path_in_storage, params.path_in_storage)
+    await upload_handler.save_files_to_storage(abs_path, files)
     return {"message": 'successfully uploaded files'}
 
 @app.post('/make-dir-in-storage')
 def make_dir_in_storage(user=Depends(auth_depend.auth), params: MakeDirInStorageQuery = Query()):
     abs_path = path_joiner.create_absolute_path(user.id, params.path_in_storage)
-    path_ensurer.ensure_path_safety(user.id, params.path_in_storage)
+    path_ensurer.ensure_path_safety_on_endpoint_level(abs_path, params.path_in_storage, params.path_in_storage)
     make_dir_handler.make_dir_in_storage(abs_path, params.name)
 
 @app.post('/log-out')
@@ -1007,482 +1143,55 @@ def sign_up_endpoint(params: SignUpQuery = Query()):
 def authenticate(response: Response, params: AuthenticateQuery = Query()):
     auth_handler.auth_with_psw_and_set_session_cookie(params.name, params.password, response)
     return {"message": 'successfully logged_in'}
+from .cache_handler import MemCacher, RedisCacher
+class Cacher:
+    def __init__(self, client, expire_time):
+        self.client = client
+        self.expire_time = expire_time
 
-from datetime import datetime
+    def get_data(self, key):
+        raise NotImplementedError
 
+    def put_data(self, key, value):
+        raise NotImplementedError
 
-print(datetime.astimezone())from werkzeug.security import generate_password_hash, check_password_hash
-from secrets import token_urlsafe
+    def delete_data(self, key):
+        raise NotImplementedError
 
-class Hasher:
+class MemCacher(Cacher):
+    def __init__(self, memcache_client, data_expire_time):
+        super().__init__(memcache_client, data_expire_time)
 
-    def generate_psw_hash(self, password):
-        return generate_password_hash(password)
+    def get_data(self, key):
+        return self.client.get(key)
 
-    def checK_password(self, password, hashed_psw):
-        return check_password_hash(hashed_psw, password)
+    def put_data(self, key, value):
+        self.client.add(key, value, self.expire_time)
 
-    def create_session_id_hash(self):
-        return token_urlsafe(32)
-from .path_validator import PathValidEnsurer
-from .path_creator import PathJoiner
-from .logger import Logger
-from .text_encoding import get_encoded_string
-from .path_cutter import PathCutter
-from .time_handler import TimeHandler
-from .hasher import Hasherfrom exceptions import NotAUserId
+    def delete_data(self, key):
+        self.client.delete(key)
 
-class PathCutter:
-    def __init__(self, root_path):
-        self.root_path = root_path
+class RedisCacher(Cacher):
+    def __init__(self, redis_client, data_expire_time):
+        super().__init__(redis_client, data_expire_time)
 
-    def cut_path(self, path:str, cutting_part):
-        return path.removeprefix(cutting_part)
+    def get_data(self, key):
+        return self.client.get(key)
 
-    def get_user_id_from_abs_path(self, abs_path: str):
-        path = abs_path.removeprefix(self.root_path)
-        id = self.get_user_id_part_from_rel_path(path)
-        if not id.isdigit():
-            raise NotAUserId(abs_path)
-        return id
+    def put_data(self, key, value):
+        self.client.set(key, value, ex=self.expire_time, nx=True)
 
-    def get_user_id_part_from_rel_path(self, path:str) -> str:
-        #path must look like '/<id>/some/path or '<id>/some/path
-        if path[0] == '/':
-            return path.split('/')[1]
-        return path.split('/')[0]
+    def delete_data(self, key):
+        self.client.delete(key)
 
-    def remove_id_from_rel_path(self, rel_path):
-        if rel_path[0] == '/':
-            return rel_path[2:]
-        return rel_path[1:]
+    def is_data_exists(self, key):
+        return self.client.exists(key)from .auth import AuthDependfrom fastapi import Request
 
-from urllib.parse import quote
 
+class AuthDepend:
+    def __init__(self, auth_handler):
+        self.auth_handler = auth_handler
 
-def get_encoded_string(string):
-    return quote(string)
-
-from pathlib import Path
-
-
-class PathJoiner:
-    def __init__(self, root_path):
-        self.root_path = root_path
-
-
-    @property
-    def root(self):
-        return self.root_path
-
-
-    def join_paths(self, path1, path2):
-        new_path = Path(Path(path1) / Path(path2))
-        return new_path.__str__()
-
-    def join_with_root_path(self, path:str | int):
-        if isinstance(path, int):
-            path = str(path)
-        return self.join_paths(self.root_path, path)
-
-    def create_absolute_path(self, user_id, entity_path_in_storage):
-        if entity_path_in_storage is None:
-            entity_path_in_storage = ''
-        user_id = str(user_id)
-        abs_user_dir_path = self.create_absolute_user_dir_path(user_id)
-        abs_path = self.join_paths(abs_user_dir_path, entity_path_in_storage)
-        return abs_path
-
-    def create_absolute_user_dir_path(self, user_id):
-        user_id = str(user_id)
-        return self.join_with_root_path(user_id)from datetime import datetime, timedelta
-
-class TimeHandler:
-    def add_days_to_current_date(self, days):
-        time_delta = timedelta(days=days)
-        now = datetime.today()
-        new_date = now + time_delta
-        return new_date
-
-    def is_date_future(self, date):
-        return datetime.now().date() < date
-
-    def get_today_date(self):
-        return datetime.today()
-
-    def get_str_today_date(self):
-        return self.get_today_date().strftime('%d/%m/%Y')class Logger:
-
-    def __init__(self):
-        self.red_log = "\033[1;31mLOG\033[0m"
-
-    def log(self, exception):
-        print(f'{self.red_log}{exception}{self.red_log}')
-
-    def decor_log(self, func):
-        def wrapper(*args, **kwargs):
-            try:
-                result = func(*args, **kwargs)
-                return result
-            except Exception as e:
-                Logger.log(e)
-        return wrapper
-from exceptions import APIPathGoesBeyondLimits
-from path_explorator import PathGoesBeyondLimits, EntityDoesNotExists
-from interfaces import IPathCutter
-from pathlib import Path
-
-
-class PathValidEnsurer:
-
-    def __init__(self, root_dir, path_cutter, path_creator):
-        self.path_cutter: IPathCutter = path_cutter
-        self.path_creator = path_creator
-        self.root_dir = root_dir
-
-    def does_contain_uplinks(self, path:str | Path):
-        path = Path(self.root_dir, path)
-        if ('..', '.', './') in path.parts:
-            return True
-        return False
-
-    def does_contain_symlinks_and_uplinks(self, path:str):
-        path = Path(self.root_dir, path)
-        if path.is_symlink() and self.does_contain_uplinks(path):
-            return True
-        return False
-
-
-    def is_goes_beyond_limits(self, requesting_path: str | None):
-        return not self.is_path_rel_to_another_path(requesting_path, self.root_dir.__str__())
-
-
-    def is_path_rel_to_another_path(self, path: str | None, relative_to_path: str | None):
-        if path is None:
-            path = ''
-        if relative_to_path is None:
-            relative_to_path = ''
-        path = Path(path).resolve()
-        relative_to_path = Path(relative_to_path)
-        if path.is_relative_to(relative_to_path):
-           return True
-        return False
-
-    @property
-    def root(self):
-        return self.root_dir.__str__()
-
-    def is_exists(self, path: str) -> bool:
-        """
-        Checks if specified path exists
-        :param path: path to the entity checking
-        :return: exists or not True or False
-        """
-        if not isinstance(path, str):
-            raise TypeError(f'path arg must be str, not {type(path)}')
-        entity = Path(self.root_dir, path)
-        return entity.exists()
-
-
-    def is_file(self, path: str) -> bool:
-        """
-        Checks if specified entity is FILE
-        :param path: path to entity
-        :return: file or not
-        """
-        if not isinstance(path, str):
-            raise TypeError(f'path arg must be str, not {type(path)}')
-        entity = Path(self.root_dir, path)
-        return entity.is_file()
-
-
-    def is_dir(self, path: str) -> bool:
-        """
-        Checks if specified entity is DIRECTORY/FOLDER
-        :param path: path to entity
-        :return: dir or not
-        """
-        if not isinstance(path, str):
-            raise TypeError(f'path arg must be str, not {type(path)}')
-        entity = Path(self.root_dir, path)
-        return entity.is_dir()
-
-
-    def raise_if_goes_beyond_limits(self, abs_path: str, user_id, requesting_path:str):
-        user_directory = self.path_creator.create_absolute_user_dir_path(user_id)
-        if self.is_goes_beyond_limits(abs_path):
-            raise PathGoesBeyondLimits(requesting_path)
-        if not self.is_path_rel_to_another_path(abs_path, user_directory):
-            raise PathGoesBeyondLimits(requesting_path)
-
-    def raise_if_entity_dont_exists(self, path:str):
-        if not self.is_exists(path):
-            raise EntityDoesNotExists(path)
-
-    def ensure_path_safety(self, user_id: int, path_in_storage: str):
-        try:
-            abs_path = self.path_creator.create_absolute_path(user_id, path_in_storage)
-            self.raise_if_goes_beyond_limits(abs_path, user_id, path_in_storage)
-        except PathGoesBeyondLimits:
-            raise APIPathGoesBeyondLimits(path_in_storage)
-
-
-from .models import User, Sessionfrom sqlalchemy import Column, Integer, String, Boolean, create_engine, Date, ForeignKey
-from sqlalchemy.orm import declarative_base
-
-from config import DATABASE_URL
-
-engine = create_engine(DATABASE_URL)
-
-
-Base = declarative_base()
-
-
-class User(Base):
-
-    __tablename__ = "users"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    password = Column(String(255))
-    name = Column(String(30), unique=True)
-    is_admin = Column(Boolean, default=False)
-    owning_dir_id = Column(Integer, unique=True)
-
-class Session(Base):
-    __tablename__ = "sessions"
-
-    id = Column(String(50), primary_key=True)
-    user_id = Column(Integer, ForeignKey(User.id))
-    expire_date = Column(Date)
-
-Base.metadata.create_all(bind=engine)
-
-from .directory_reader import StorageReader
-from .archivator import Archivator
-from .storage_writer import StorageWriterfrom aiofiles import open as aio_open
-from pathlib import Path
-
-
-class StorageWriter:
-    def __init__(self, root_dir_abs_path: str):
-        if not isinstance(root_dir_abs_path, str):
-            raise TypeError(f'root_dir_abs_path argument must be str, not {type(root_dir_abs_path)}')
-        self.root_dir = Path(root_dir_abs_path)
-
-    def create_dir(self, path: str | None, name:str, exist_ok=True):
-        """
-        Creates directory/folder in specified path with specified name
-        :param path: Path to the location of the future directory.
-        The path must be relative to the root directory, which is passed as an argument to __init__ as root_dir_abs_path.
-        This rule is used in every object where root_dir_abs_path is passed during initialization.
-        you can set path param as empty string if you need to make dir in root_ dir
-        :param name: name of dir
-        :return: None
-        """
-        if path is None:
-            path = ''
-        if not isinstance(path, str):
-            raise TypeError(f'path argument must be str, not {type(path)}')
-        if not isinstance(name, str):
-            raise TypeError(f'name argument must be str, not {type(path)}')
-        root_dir = Path(self.root_dir, path, name)
-        root_dir.mkdir(exist_ok=exist_ok)
-
-    def create_file(self, path: str | None , name: str, exist_ok):
-        """
-        Create file in specified path with specified name
-        :param path: Path to the location of the future file.
-        The path must be relative to the root directory, which is passed as an argument to __init__ as root_dir_abs_path.
-        This rule is used in every object where root_dir_abs_path is passed during initialization.
-        you can set path param as empty string if you need to make file in root_ dir
-        :param name: name of file
-        :return: None
-        """
-        if path is None:
-            path = ''
-        if not isinstance(path, str):
-            raise TypeError(f'path argument must be str, not {type(path)}')
-        if not isinstance(name, str):
-            raise TypeError(f'name argument must be str, not {type(path)}')
-        path_to_future_file = Path(self.root_dir, path, name)
-        path_to_future_file.touch(exist_ok=exist_ok)
-
-    async def async_write_from_fastapi_uploadfile_to_file(self, source_file, output_file_path, exist_ok=True):
-        """
-        special method for fastapi uploading file to hard disk
-        :param source_file: fastapi UploadFile object
-        :param output_file_path: path where an actual file will be saved on hard disk
-        :return: None
-        """
-        output_file_path = Path(self.root_dir, output_file_path)
-        async with aio_open(output_file_path, 'wb') as output_file:
-            while content := await source_file.read(1024):
-                await output_file.write(content)from pathlib import Path
-from tempfile import mkdtemp
-from zipfile import ZipFile, ZIP_DEFLATED
-
-
-class Archivator:
-    def __init__(self):
-        self._zip_path = None
-        self.tmp_dir = Path(mkdtemp())
-
-    def has_zip_path(self):
-        return self._zip_path is not None
-
-    def make_zip_in_tmp_dir(self, archivable_dir):
-        return self.tmp_dir / f"{archivable_dir.name}.zip"
-
-    def write_from_dir_to_zip(self, dir, zip):
-        with ZipFile(zip, mode='w', compression=ZIP_DEFLATED, allowZip64=True, compresslevel=6) as zipf:
-            for file_path in dir.rglob('*'):
-                if file_path.is_file():
-                    entity = file_path.relative_to(dir)
-                    zipf.write(file_path, entity)
-
-    def cleanup_temp_files(self):
-        if self.has_zip_path():
-            self._cleanup()
-            self._zip_path = None
-
-    def _cleanup(self):
-        self._zip_path.unlink(missing_ok=True)
-
-    def create_large_zip(self, archivable_dir_path: str) -> Path:
-        archivable_dir = Path(archivable_dir_path)
-        self._zip_path = self.make_zip_in_tmp_dir(archivable_dir)
-        self.write_from_dir_to_zip(archivable_dir, self._zip_path)
-        return self._zip_path
-from pathlib import Path
-from exceptions import EntityDoesNotExists, EntityIsNotADir
-
-
-class StorageReader:
-    def __init__(self, root_dir_abs_path: str, path_creator, path_cutter):
-        self.root_dir = self.__init_root_dir(root_dir_abs_path)
-        self._path_creator = path_creator
-        self._path_cutter = path_cutter
-
-    def __init_root_dir(self, root_dir_abs_path: str):
-        if not isinstance(root_dir_abs_path, str):
-            raise TypeError(f'root_dir_abs_path type must be str, not {type(root_dir_abs_path)}')
-        root_dir = Path(root_dir_abs_path)
-
-        if not root_dir.exists():
-            raise EntityDoesNotExists(root_dir)
-
-        return root_dir
-
-    @property
-    def root_path(self):
-        return self.root_dir.__str__()
-
-    def join_with_root_path(self, path: str):
-        joined = self.root_dir.joinpath(Path(path)).__str__()
-        return joined
-
-    def get_all_filenames_in_dir(self, dirpath: str | None):
-        """
-        Returns names of all FILES in directory
-        :param dirpath: directory getting files from
-        :return: List of all files (strings) in specified directory
-        """
-        if dirpath is None:
-            dirpath = ''
-        if not isinstance(dirpath, str):
-            raise TypeError(f'dirpath arg must be str, not {type(dirpath)}')
-        path = Path(self.root_dir, dirpath)
-        if not path.exists():
-            raise EntityDoesNotExists(dirpath)
-        if not path.is_dir():
-            raise EntityIsNotADir(dirpath)
-        filenames = [self._path_cutter.cut_path(str(fname), str(self.root_dir)) for fname in path.iterdir() if fname.is_file()]
-        return filenames
-
-    def get_all_entitynames_in_dir(self, dirpath: str | None):
-        """
-        Returns all ENTITIES names (entity = any file, folder)
-        :param dirpath: directory getting entities from
-        :return: list of all entities names (strings) in specified directory
-        """
-        if dirpath is None:
-            dirpath = ''
-        if not isinstance(dirpath, str):
-            raise TypeError(f'dirpath arg must be str, not {type(dirpath)}')
-        path = Path(self.root_dir, dirpath)
-        print(path.__str__(), 'PATH')
-        if not path.exists():
-            raise EntityDoesNotExists(dirpath)
-        if not path.is_dir():
-            raise EntityIsNotADir(dirpath)
-        entities_names = [self._path_cutter.cut_path(str(entity), str(self.root_dir)) for entity in path.iterdir()]
-        return entities_names
-
-    def find_entities_path(self, searching_in: str | None, pattern: str) -> list[str]:
-        """
-        Return list with paths of entity or entities that match a given pattern
-        :param searching_in: path to directory in which to find
-        :param pattern: pattern of entity name you need to find (example "fname.txt", "*.txt")
-        :return: List with absolute paths (Path objects) or None
-        """
-        if searching_in is None:
-            searching_in = ''
-        if not isinstance(searching_in, str):
-            raise TypeError(f'searching_in arg must be str, not {type(searching_in)}')
-        if not isinstance(pattern, str):
-            raise TypeError(f'pattern arg must be str, not {type(pattern)}')
-        searchable_dir = Path(self.root_dir, searching_in)
-        paths = [self._path_cutter.cut_path(str(path), str(self.root_dir)) for path in searchable_dir.rglob(pattern)]
-        return paths
-
-    def is_exists(self, path: str | None) -> bool:
-        """
-        Checks if specified path exists
-        :param path: path to the entity checking
-        :return: exists or not True or False
-        """
-        if path is None:
-            path = ''
-        if not isinstance(path, str):
-            raise TypeError(f'path arg must be str, not {type(path)}')
-        entity = Path(self.root_dir, path)
-        return entity.exists()
-
-    def is_file(self, path: str | None) -> bool:
-        """
-        Checks if specified entity is FILE
-        :param path: path to entity
-        :return: file or not
-        """
-        if path is None:
-            path = ''
-        if not isinstance(path, str):
-            raise TypeError(f'path arg must be str, not {type(path)}')
-        entity = Path(self.root_dir, path)
-        return entity.is_file()
-
-    def is_dir(self, path: str | None) -> bool:
-        """
-        Checks if specified entity is DIRECTORY/FOLDER
-        :param path: path to entity
-        :return: dir or not
-        """
-        if path is None:
-            path = ''
-        if not isinstance(path, str):
-            raise TypeError(f'path arg must be str, not {type(path)}')
-        entity = Path(self.root_dir, path)
-        return entity.is_dir()
-
-    def get_name(self, path: str | None) -> str:
-        """
-        Get name of entity from strlike path
-        :param path: strlike path
-        :return: str name of entity (example /home/user/hello.txt  will return hello.txt)
-        """
-        if path is None:
-            path = ''
-        if not isinstance(path, str):
-            raise TypeError(f'path arg must be str, not {type(path)}')
-        entity_path = Path(self.root_dir, path)
-        return entity_path.name
+    def auth(self, request: Request):
+        session_id = request.cookies.get('session_id')
+        return self.auth_handler.auth_with_session_id(session_id)
