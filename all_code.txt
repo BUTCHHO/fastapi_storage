@@ -255,108 +255,6 @@ def test_ensurer_goes_beyond_limits():
     is_unsafe_rel = ensurer.is_goes_beyond_limits(beyond_rel_path)
     is_safe = not ensurer.is_goes_beyond_limits(safe_path)
     assert is_unsafe == is_unsafe_rel == is_safe == True
-from .upload import upload_router
-from .download import download_router
-from .view_storage import view_storage_router
-from .auth import auth_router
-from .storage_acting import storage_acting_routerfrom fastapi import APIRouter, BackgroundTasks, Query, Depends
-
-from schemas.query import DownloadQuery
-from view_handlers import FileResponseHandler
-from app.singletones.singletones import archivator, logger, path_joiner, path_ensurer, storage_reader
-from .dependencies import auth_depend
-
-download_router = APIRouter()
-
-file_response_handler = FileResponseHandler(archivator, storage_reader, logger, path_ensurer, path_joiner)
-
-
-
-@download_router.get('/download-entity')
-def download_entity_endpoint(background_tasks: BackgroundTasks, params: DownloadQuery = Query(), user=Depends(auth_depend.auth)):
-    response = file_response_handler.get_response(user.id, params.entity_path_in_storage)
-    background_tasks.add_task(archivator.cleanup_temp_files)
-    return responsefrom fastapi import APIRouter, Depends
-from app.singletones.singletones import storage_reader, logger, path_joiner, path_cutter, path_ensurer
-from schemas.response import ViewStorageResponse
-from view_handlers import StorageViewHandler
-from .dependencies import auth_depend
-
-view_storage_router = APIRouter()
-
-storage_view_handler = StorageViewHandler(storage_reader, logger, path_joiner, path_cutter, path_ensurer)
-
-
-@view_storage_router.get('/storage', response_model=ViewStorageResponse)
-def view_storage_root(entity_path_in_storage = '', user=Depends(auth_depend.auth)):
-    entities = storage_view_handler.get_list_of_entities(user.id, entity_path_in_storage)
-    return {"entities": entities}
-
-
-@view_storage_router.get('/storage/{entity_path_in_storage:path}', response_model=ViewStorageResponse)
-async def view_storage(entity_path_in_storage: str, user=Depends(auth_depend.auth)):
-    entities = storage_view_handler.get_list_of_entities(user.id, entity_path_in_storage)
-    return {"entities": entities}from fastapi import APIRouter, UploadFile, Query, Depends
-from schemas.query import UploadQuery
-from view_handlers import UploadFileHandler
-from app.singletones.singletones import storage_writer, path_ensurer, logger, path_joiner
-
-from .dependencies import auth_depend
-
-upload_router = APIRouter()
-
-upload_handler = UploadFileHandler(storage_writer, path_ensurer, logger, path_joiner)
-
-@upload_router.post('/upload-entity')
-async def upload_entity_endpoint(files: list[UploadFile], params: UploadQuery = Query(), user=Depends(auth_depend.auth)):
-    await upload_handler.save_files_to_storage(user.id, params.path_in_storage, files)
-    return {"message": 'successfully uploaded files'}
-from fastapi import APIRouter, Request, Response, Query
-from view_handlers import SignUpHandler, LogOutHandler, AuthHandler
-from app.singletones.singletones import session_deleter, logger, user_reader, storage_writer, user_registrator, user_authenticator
-from schemas.query import SignUpQuery, AuthenticateQuery
-
-
-auth_router = APIRouter()
-
-
-logout_handler = LogOutHandler(session_deleter, logger)
-sign_up_handler = SignUpHandler(user_registrator, storage_writer, user_reader)
-auth_handler = AuthHandler(user_authenticator)
-
-
-@auth_router.post('/log-out')
-def log_out_endpoint(request: Request, response: Response):
-    logout_handler.logout_user(request, response)
-
-
-@auth_router.post('/sign-up')
-def sign_up_endpoint(params: SignUpQuery = Query()):
-    sign_up_handler.sign_up(params)
-    return {"message": 'successfully signed up'}
-
-@auth_router.post('/log-in')
-def authenticate(response: Response, params: AuthenticateQuery = Query()):
-    auth_handler.auth_with_psw_and_set_session_cookie(params.name, params.password, response)
-    return {"message": 'successfully logged_in'}from fastapi import APIRouter, Depends, Query
-
-from schemas.query import MakeDirInStorageQuery
-from view_handlers import MakeDirHandler
-from app.singletones.singletones import logger, storage_writer, path_joiner, path_ensurer
-from .dependencies import auth_depend
-
-storage_acting_router = APIRouter()
-
-make_dir_handler = MakeDirHandler(logger, storage_writer, path_joiner, path_ensurer)
-
-
-
-@storage_acting_router.post('/make-dir-in-storage')
-def make_dir_in_storage(user=Depends(auth_depend.auth), params: MakeDirInStorageQuery = Query()):
-    make_dir_handler.make_dir_in_storage(user.id, params.path_in_storage, params.name)from .auth import auth_handler
-from depends import AuthDepend
-
-auth_depend = AuthDepend(auth_handler)
 from .auth import AuthDependfrom fastapi import Request
 
 
@@ -564,235 +462,7 @@ class ITimeHandler(ABC):
     @abstractmethod
     def get_today_date(self) -> object: pass
     @abstractmethod
-    def get_str_today_date(self) -> str: passfrom fastapi import Response
-
-from exceptions import APIIncorrectPassword, APIUserDontExists, IncorrectPassword, UserDontExists, APIUnauthorized, APISessionDontExists, APISessionExpired, SessionExpired, SessionDontExists
-from config import SESSION_COOKIES_EXPIRE_TIME
-
-class AuthHandler:
-    def __init__(self, authenticator):
-        self.authenticator = authenticator
-
-    def set_session_id_cookie(self, session_id, response: Response):
-        response.set_cookie(key="session_id", value=session_id, max_age=SESSION_COOKIES_EXPIRE_TIME,
-                            samesite='lax', httponly=True)
-
-    def auth_with_psw_and_set_session_cookie(self, name, password, response: Response):
-        try:
-            session_id = self.authenticator.make_session_by_name_and_psw(name, password)
-            self.set_session_id_cookie(session_id, response)
-        except IncorrectPassword:
-            raise APIIncorrectPassword(password)
-        except UserDontExists:
-            raise APIUserDontExists(name)
-
-    def auth_with_session_id(self, session_id):
-        try:
-            if session_id is None:
-                raise APIUnauthorized
-            return self.authenticator.auth_by_session_id(session_id)
-
-        except SessionExpired:
-            raise APISessionExpired
-        except SessionDontExists:
-            raise APISessionDontExists
-
-from fastapi.responses import FileResponse
-from fastapi import HTTPException
-from interfaces import IStorageReader, IArchivator, ILogger, IPathValidator
-from exceptions import APIPathGoesBeyondLimits, APIEntityDoesNotExists, APIUnsupportedEntityType
-from path_explorator import EntityDoesNotExists, PathGoesBeyondLimits
-from utils import get_encoded_string
-
-
-class FileResponseHandler:
-    def __init__(self, archivator, storage_reader, logger, path_validator, path_joiner):
-        self.archivator: IArchivator = archivator
-        self.storage_reader: IStorageReader = storage_reader
-        self.path_joiner = path_joiner
-        self.logger: ILogger = logger
-        self.ensurer = path_validator
-        self.encode_string = get_encoded_string
-
-    def _make_response(self, path_to_entity):
-        try:
-            str_path_to_entity = path_to_entity.__str__()
-            entity_name = self.storage_reader.get_name(str_path_to_entity)
-            encoded_entity_name = self.encode_string(entity_name)
-            return FileResponse(path_to_entity,
-                                filename=f'{entity_name}',
-                                headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_entity_name}"},
-    )
-        except Exception as e:
-            self.logger.log(e)
-            raise e
-
-    def get_zip_file_response(self, path_in_storage_with_id):
-        try:
-            absolute_path_dir = self.storage_reader.join_with_root_path(path_in_storage_with_id)
-            zip_path = self.archivator.create_large_zip(absolute_path_dir)
-            return self._make_response(zip_path)
-        except Exception as e:
-            self.logger.log(e)
-
-    def get_file_response(self, path_in_storage_with_id):
-        absolute_path_file = self.storage_reader.join_with_root_path(path_in_storage_with_id)
-        return self._make_response(absolute_path_file)
-
-
-    def get_response(self, user_id, entity_path_in_storage):
-        entity_path_in_storage = self.path_joiner.join_paths(str(user_id), entity_path_in_storage)
-        self.ensurer.ensure_path_safety(str(user_id), entity_path_in_storage)
-        if not self.ensurer.is_exists(entity_path_in_storage):
-            raise APIEntityDoesNotExists(entity_path_in_storage)
-        if self.storage_reader.is_dir(entity_path_in_storage):
-            return self.get_zip_file_response(entity_path_in_storage)
-        if self.storage_reader.is_file(entity_path_in_storage):
-            return self.get_file_response(entity_path_in_storage)
-        else:
-            raise APIUnsupportedEntityType(entity_path_in_storage=entity_path_in_storage)
-
-from interfaces import IStorageWriter
-from exceptions import APIDirectoryAlreadyExists
-
-
-class MakeDirHandler():
-    def __init__(self, logger, storage_writer, path_joiner, path_ensurer):
-        self.logger = logger
-        self.storage_writer: IStorageWriter = storage_writer
-        self.path_joiner = path_joiner
-        self.path_ensurer = path_ensurer
-
-    def make_dir_in_storage(self,user_id, path, name):
-        if path is None:
-            path = ''
-        try:
-            self.path_ensurer.ensure_path_safety(user_id, path)
-            path_with_user_id = self.path_joiner.join_paths(str(user_id), path)
-            self.storage_writer.create_dir(path_with_user_id, name)
-        except FileExistsError:
-            raise APIDirectoryAlreadyExistsfrom .file_response_handler import FileResponseHandler
-from .upload_handler import UploadFileHandler
-from .storage_view_handler import StorageViewHandler
-from .sign_up_handler import SignUpHandler
-from .auth_handler import AuthHandler
-from .make_dir_handler import MakeDirHandler
-from .logout_handler import  LogOutHandlerfrom exceptions import APIEntityDoesNotExists, APITooManyFiles
-from interfaces import IPathValidator, ILogger, IStorageWriter
-
-class UploadFileHandler:
-    def __init__(self, storage_writer, path_ensurer, logger, path_joiner):
-        self.storage_writer: IStorageWriter = storage_writer
-        self.path_ensurer = path_ensurer
-        self.path_joiner = path_joiner
-        self.logger: ILogger = logger
-        self.max_upload_files = 20
-
-    def create_rel_fpath_with_id(self, user_id, rel_path, fname):
-        fpath_and_name = self.join_fpath_and_fname(rel_path, fname)
-        return self.path_joiner.join_paths(user_id, fpath_and_name)
-
-    def join_fpath_and_fname(self, fpath, fname):
-        return f'{fpath}/{fname}'
-
-    async def _iterate_and_save_files_to_storage(self, files: list, output_path, user_id):
-        try:
-            for file in files:
-                rel_fpath_with_id = self.create_rel_fpath_with_id(user_id, output_path, file.filename)
-                await self.storage_writer.async_write_from_fastapi_uploadfile_to_file(file, rel_fpath_with_id)
-        except FileNotFoundError:
-            raise APIEntityDoesNotExists(output_path)
-        except Exception as e:
-            self.logger.log(e)
-            raise e
-
-    async def save_files_to_storage(self, user_id, path_in_storage, files: list):
-        if len(files) > self.max_upload_files:
-            raise APITooManyFiles
-        self.path_ensurer.ensure_path_safety(user_id, path_in_storage)
-        await self._iterate_and_save_files_to_storage(files, path_in_storage, str(user_id))
-
-from fastapi import HTTPException
-
-from exceptions import APIEntityDoesNotExists, EntityDoesNotExists
-from interfaces import ILogger, IStorageReader, IPathJoiner, IPathCutter
-
-
-class StorageViewHandler:
-    def __init__(self, storage_reader, logger, path_joiner, path_cutter, path_ensurer):
-        self.storage_reader: IStorageReader = storage_reader
-        self.path_ensurer = path_ensurer
-        self.logger: ILogger = logger
-        self.path_joiner = path_joiner
-        self.path_cutter: IPathCutter = path_cutter
-
-    def _get_abs_path(self, user_id, path_to_dir):
-        path_with_user_id = self.path_joiner.join_paths(user_id, path_to_dir)
-        return self.storage_reader.join_with_root_path(path_with_user_id)
-
-    def _cut_user_id_from_entitynames(self, entities: list[str]):
-        cut_entities = [self.path_cutter.remove_id_from_rel_path(entity) for entity in entities]
-        return cut_entities
-
-    def _get_all_entitynames_in_dir(self, rel_dir_path):
-        entitynames = self.storage_reader.get_all_entitynames_in_dir(rel_dir_path)
-        return self._cut_user_id_from_entitynames(entitynames)
-
-    def get_list_of_entities(self, user_id, path_in_storage):
-        try:
-            self.path_ensurer.ensure_path_safety(user_id, path_in_storage)
-            path_in_storage_with_id = self.path_joiner.join_paths(str(user_id), path_in_storage)
-            entitynames = self._get_all_entitynames_in_dir(path_in_storage_with_id)
-            return entitynames
-        except EntityDoesNotExists:
-            raise APIEntityDoesNotExists(path_in_storage)
-
-        except HTTPException as e:
-            raise e
-
-        except Exception as e:
-            self.logger.log(e)
-from fastapi import Request, Response
-
-
-class LogOutHandler:
-    def __init__(self, session_deleter, logger):
-        self.session_deleter = session_deleter
-        self.logger = logger
-
-    def logout_user(self, request: Request, response: Response):
-        try:
-            session_id = request.cookies.get('session_id')
-            if session_id is None:
-                return
-            response.delete_cookie('session_id')
-            self.session_deleter.delete_session(session_id)
-        except Exception as e:
-            self.logger.log(e)
-            raise e
-from exceptions import APIUserAlreadyExists, UserAlreadyExists, APIUserStorageAlreadyExists
-from interfaces import IStorageWriter
-
-class SignUpHandler:
-    def __init__(self, user_registrator, storage_writer, user_reader):
-        self.user_registrator = user_registrator
-        self.storage_writer: IStorageWriter = storage_writer
-        self.user_reader = user_reader
-
-
-    def sign_up(self, params):
-        try:
-            self.user_registrator.create_user(params.name, params.password)
-            user = self.user_reader.get_by_kwargs(name = params.name)
-            self.create_user_dir(user.id)
-        except UserAlreadyExists:
-            raise APIUserAlreadyExists(params.name)
-
-    def create_user_dir(self, user_id):
-        try:
-            self.storage_writer.create_dir('', str(user_id), exist_ok=False)
-        except FileExistsError:
-            raise APIUserStorageAlreadyExistsfrom .cache_handler import MemCacher, RedisCacher
+    def get_str_today_date(self) -> str: passfrom .cache_handler import MemCacher, RedisCacher
 class Cacher:
     def __init__(self, client, expire_time):
         self.client = client
@@ -984,6 +654,368 @@ class UserRegistration:
             self.logger.log(e)
 
 
+from .view_storage import view_storage_router
+from .storage_acting import storage_acting_router
+from .upload import upload_router
+from .authorization import auth_router
+from .download import download_routerfrom .router import download_routerfrom fastapi import APIRouter, BackgroundTasks, Query, Depends
+
+from .schemas.query import DownloadQuery
+from .endpoint_handlers import FileResponseHandler
+from app.singletones import archivator, logger, path_joiner, path_ensurer, storage_reader
+from app.routes.dependencies import auth_depend
+
+download_router = APIRouter()
+
+file_response_handler = FileResponseHandler(archivator, storage_reader, logger, path_ensurer, path_joiner)
+
+
+
+@download_router.get('/download-entity')
+def download_entity_endpoint(background_tasks: BackgroundTasks, params: DownloadQuery = Query(), user=Depends(auth_depend.auth)):
+    response = file_response_handler.get_response(user.id, params.entity_path_in_storage)
+    background_tasks.add_task(archivator.cleanup_temp_files)
+    return responsefrom pydantic import BaseModel
+
+
+class DownloadQuery(BaseModel):
+    entity_path_in_storage: str
+from fastapi.responses import FileResponse
+
+from interfaces import IStorageReader, IArchivator, ILogger
+from exceptions import APIEntityDoesNotExists, APIUnsupportedEntityType
+from utils import get_encoded_string
+
+
+class FileResponseHandler:
+    def __init__(self, archivator, storage_reader, logger, path_validator, path_joiner):
+        self.archivator: IArchivator = archivator
+        self.storage_reader: IStorageReader = storage_reader
+        self.path_joiner = path_joiner
+        self.logger: ILogger = logger
+        self.ensurer = path_validator
+        self.encode_string = get_encoded_string
+
+    def _make_response(self, path_to_entity):
+        try:
+            str_path_to_entity = path_to_entity.__str__()
+            entity_name = self.storage_reader.get_name(str_path_to_entity)
+            encoded_entity_name = self.encode_string(entity_name)
+            return FileResponse(path_to_entity,
+                                filename=f'{entity_name}',
+                                headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_entity_name}"},
+    )
+        except Exception as e:
+            self.logger.log(e)
+            raise e
+
+    def get_zip_file_response(self, path_in_storage_with_id):
+        try:
+            absolute_path_dir = self.storage_reader.join_with_root_path(path_in_storage_with_id)
+            zip_path = self.archivator.create_large_zip(absolute_path_dir)
+            return self._make_response(zip_path)
+        except Exception as e:
+            self.logger.log(e)
+
+    def get_file_response(self, path_in_storage_with_id):
+        absolute_path_file = self.storage_reader.join_with_root_path(path_in_storage_with_id)
+        return self._make_response(absolute_path_file)
+
+
+    def get_response(self, user_id, entity_path_in_storage):
+        entity_path_in_storage = self.path_joiner.join_paths(str(user_id), entity_path_in_storage)
+        self.ensurer.ensure_path_safety(str(user_id), entity_path_in_storage)
+        if not self.ensurer.is_exists(entity_path_in_storage):
+            raise APIEntityDoesNotExists(entity_path_in_storage)
+        if self.storage_reader.is_dir(entity_path_in_storage):
+            return self.get_zip_file_response(entity_path_in_storage)
+        if self.storage_reader.is_file(entity_path_in_storage):
+            return self.get_file_response(entity_path_in_storage)
+        else:
+            raise APIUnsupportedEntityType(entity_path_in_storage=entity_path_in_storage)
+
+from .file_response_handler import FileResponseHandlerfrom .router import view_storage_routerfrom fastapi import APIRouter, Depends
+from app.singletones import storage_reader, logger, path_joiner, path_cutter, path_ensurer
+from .schemas.response import ViewStorageResponse
+from .endpoint_handlers import StorageViewHandler
+from app.routes.dependencies import auth_depend
+
+view_storage_router = APIRouter()
+
+storage_view_handler = StorageViewHandler(storage_reader, logger, path_joiner, path_cutter, path_ensurer)
+
+
+@view_storage_router.get('/storage', response_model=ViewStorageResponse)
+def view_storage_root(entity_path_in_storage = '', user=Depends(auth_depend.auth)):
+    entities = storage_view_handler.get_list_of_entities(user.id, entity_path_in_storage)
+    return {"entities": entities}
+
+
+@view_storage_router.get('/storage/{entity_path_in_storage:path}', response_model=ViewStorageResponse)
+async def view_storage(entity_path_in_storage: str, user=Depends(auth_depend.auth)):
+    entities = storage_view_handler.get_list_of_entities(user.id, entity_path_in_storage)
+    return {"entities": entities}from pydantic import BaseModel
+
+
+class ViewStorageResponse(BaseModel):
+    entities: listfrom .storage_view_handler import StorageViewHandlerfrom fastapi import HTTPException
+
+from exceptions import APIEntityDoesNotExists, EntityDoesNotExists
+from interfaces import ILogger, IStorageReader, IPathCutter
+
+
+class StorageViewHandler:
+    def __init__(self, storage_reader, logger, path_joiner, path_cutter, path_ensurer):
+        self.storage_reader: IStorageReader = storage_reader
+        self.path_ensurer = path_ensurer
+        self.logger: ILogger = logger
+        self.path_joiner = path_joiner
+        self.path_cutter: IPathCutter = path_cutter
+
+    def _get_abs_path(self, user_id, path_to_dir):
+        path_with_user_id = self.path_joiner.join_paths(user_id, path_to_dir)
+        return self.storage_reader.join_with_root_path(path_with_user_id)
+
+    def _cut_user_id_from_entitynames(self, entities: list[str]):
+        cut_entities = [self.path_cutter.remove_id_from_rel_path(entity) for entity in entities]
+        return cut_entities
+
+    def _get_all_entitynames_in_dir(self, rel_dir_path):
+        entitynames = self.storage_reader.get_all_entitynames_in_dir(rel_dir_path)
+        return self._cut_user_id_from_entitynames(entitynames)
+
+    def get_list_of_entities(self, user_id, path_in_storage):
+        try:
+            self.path_ensurer.ensure_path_safety(user_id, path_in_storage)
+            path_in_storage_with_id = self.path_joiner.join_paths(str(user_id), path_in_storage)
+            entitynames = self._get_all_entitynames_in_dir(path_in_storage_with_id)
+            return entitynames
+        except EntityDoesNotExists:
+            raise APIEntityDoesNotExists(path_in_storage)
+
+        except HTTPException as e:
+            raise e
+
+        except Exception as e:
+            self.logger.log(e)
+from .router import storage_acting_routerfrom fastapi import APIRouter, Depends, Query
+
+from .schemas.query import MakeDirInStorageQuery
+from .endpoint_handlers import MakeDirHandler
+from app.singletones import logger, storage_writer, path_joiner, path_ensurer
+from app.routes.dependencies import auth_depend
+
+storage_acting_router = APIRouter()
+
+make_dir_handler = MakeDirHandler(logger, storage_writer, path_joiner, path_ensurer)
+
+
+
+@storage_acting_router.post('/make-dir-in-storage')
+def make_dir_in_storage(user=Depends(auth_depend.auth), params: MakeDirInStorageQuery = Query()):
+    make_dir_handler.make_dir_in_storage(user.id, params.path_in_storage, params.name)
+
+# @storage_acting_router.delete('/delete-entity-in-storage')
+# def delete_entity(user=Depends(auth_depend.auth), params: DeleteEntityQuery = Query()):
+from pydantic import BaseModel, Field
+
+
+class MakeDirInStorageQuery(BaseModel):
+    path_in_storage: str | None = None
+    name: str = Field(max_length=255, min_length=1)from interfaces import IStorageWriter
+from exceptions import APIDirectoryAlreadyExists
+
+
+class MakeDirHandler:
+    def __init__(self, logger, storage_writer, path_joiner, path_ensurer):
+        self.logger = logger
+        self.storage_writer: IStorageWriter = storage_writer
+        self.path_joiner = path_joiner
+        self.path_ensurer = path_ensurer
+
+    def make_dir_in_storage(self,user_id, path, name):
+        if path is None:
+            path = ''
+        try:
+            self.path_ensurer.ensure_path_safety(user_id, path)
+            path_with_user_id = self.path_joiner.join_paths(str(user_id), path)
+            self.storage_writer.create_dir(path_with_user_id, name)
+        except FileExistsError:
+            raise APIDirectoryAlreadyExistsfrom .make_dir_handler import MakeDirHandlerfrom .router import auth_routerfrom fastapi import APIRouter, Request, Response, Query
+from .endpoint_handlers import SignUpHandler, LogOutHandler, AuthHandler
+from app.singletones import session_deleter, logger, user_reader, storage_writer, user_registrator, user_authenticator
+from .schemas.query import AuthenticateQuery, SignUpQuery
+
+
+auth_router = APIRouter()
+
+
+logout_handler = LogOutHandler(session_deleter, logger)
+sign_up_handler = SignUpHandler(user_registrator, storage_writer, user_reader)
+auth_handler = AuthHandler(user_authenticator)
+
+
+@auth_router.post('/log-out')
+def log_out_endpoint(request: Request, response: Response):
+    logout_handler.logout_user(request, response)
+
+
+@auth_router.post('/sign-up')
+def sign_up_endpoint(params: SignUpQuery = Query()):
+    sign_up_handler.sign_up(params)
+    return {"message": 'successfully signed up'}
+
+@auth_router.post('/log-in')
+def authenticate(response: Response, params: AuthenticateQuery = Query()):
+    auth_handler.auth_with_psw_and_set_session_cookie(params.name, params.password, response)
+    return {"message": 'successfully logged_in'}from pydantic import BaseModel, Field
+
+
+class SignUpQuery(BaseModel):
+    name: str = Field(max_length=16, min_length=1)
+    password: str = Field(max_length=255)
+
+class AuthenticateQuery(BaseModel):
+    name: str
+    password: strfrom fastapi import Response
+
+from exceptions import APIIncorrectPassword, APIUserDontExists, IncorrectPassword, UserDontExists, APIUnauthorized, APISessionDontExists, APISessionExpired, SessionExpired, SessionDontExists
+from config import SESSION_COOKIES_EXPIRE_TIME
+
+class AuthHandler:
+    def __init__(self, authenticator):
+        self.authenticator = authenticator
+
+    def set_session_id_cookie(self, session_id, response: Response):
+        response.set_cookie(key="session_id", value=session_id, max_age=SESSION_COOKIES_EXPIRE_TIME,
+                            samesite='lax', httponly=True)
+
+    def auth_with_psw_and_set_session_cookie(self, name, password, response: Response):
+        try:
+            session_id = self.authenticator.make_session_by_name_and_psw(name, password)
+            self.set_session_id_cookie(session_id, response)
+        except IncorrectPassword:
+            raise APIIncorrectPassword(password)
+        except UserDontExists:
+            raise APIUserDontExists(name)
+
+    def auth_with_session_id(self, session_id):
+        try:
+            if session_id is None:
+                raise APIUnauthorized
+            return self.authenticator.auth_by_session_id(session_id)
+
+        except SessionExpired:
+            raise APISessionExpired
+        except SessionDontExists:
+            raise APISessionDontExists
+
+from .auth_handler import AuthHandler
+from .logout_handler import LogOutHandler
+from .sign_up_handler import SignUpHandlerfrom fastapi import Request, Response
+
+
+class LogOutHandler:
+    def __init__(self, session_deleter, logger):
+        self.session_deleter = session_deleter
+        self.logger = logger
+
+    def logout_user(self, request: Request, response: Response):
+        try:
+            session_id = request.cookies.get('session_id')
+            if session_id is None:
+                return
+            response.delete_cookie('session_id')
+            self.session_deleter.delete_session(session_id)
+        except Exception as e:
+            self.logger.log(e)
+            raise e
+from exceptions import APIUserAlreadyExists, UserAlreadyExists, APIUserStorageAlreadyExists
+from interfaces import IStorageWriter
+
+class SignUpHandler:
+    def __init__(self, user_registrator, storage_writer, user_reader):
+        self.user_registrator = user_registrator
+        self.storage_writer: IStorageWriter = storage_writer
+        self.user_reader = user_reader
+
+
+    def sign_up(self, params):
+        try:
+            self.user_registrator.create_user(params.name, params.password)
+            user = self.user_reader.get_by_kwargs(name = params.name)
+            self.create_user_dir(user.id)
+        except UserAlreadyExists:
+            raise APIUserAlreadyExists(params.name)
+
+    def create_user_dir(self, user_id):
+        try:
+            self.storage_writer.create_dir('', str(user_id), exist_ok=False)
+        except FileExistsError:
+            raise APIUserStorageAlreadyExistsfrom .router import upload_routerfrom fastapi import APIRouter, UploadFile, Query, Depends
+from .schemas.query import UploadQuery
+from .endpoint_handlers import UploadFileHandler
+from app.singletones import storage_writer, path_ensurer, logger, path_joiner
+
+from app.routes.dependencies import auth_depend
+
+upload_router = APIRouter()
+
+upload_handler = UploadFileHandler(storage_writer, path_ensurer, logger, path_joiner)
+
+@upload_router.post('/upload-entity')
+async def upload_entity_endpoint(files: list[UploadFile], params: UploadQuery = Query(), user=Depends(auth_depend.auth)):
+    await upload_handler.save_files_to_storage(user.id, params.path_in_storage, files)
+    return {"message": 'successfully uploaded files'}
+from pydantic import BaseModel
+
+
+class UploadQuery(BaseModel):
+    path_in_storage: str | None = None
+
+class MakeDirInStorageQuery(BaseModel):
+    path_in_storage: str | None = None
+    name: str
+
+from .upload_handler import UploadFileHandlerfrom exceptions import APIEntityDoesNotExists, APITooManyFiles
+from interfaces import ILogger, IStorageWriter
+
+class UploadFileHandler:
+    def __init__(self, storage_writer, path_ensurer, logger, path_joiner):
+        self.storage_writer: IStorageWriter = storage_writer
+        self.path_ensurer = path_ensurer
+        self.path_joiner = path_joiner
+        self.logger: ILogger = logger
+        self.max_upload_files = 20
+
+    def create_rel_fpath_with_id(self, user_id, rel_path, fname):
+        fpath_and_name = self.join_fpath_and_fname(rel_path, fname)
+        return self.path_joiner.join_paths(user_id, fpath_and_name)
+
+    def join_fpath_and_fname(self, fpath, fname):
+        return f'{fpath}/{fname}'
+
+    async def _iterate_and_save_files_to_storage(self, files: list, output_path, user_id):
+        try:
+            for file in files:
+                rel_fpath_with_id = self.create_rel_fpath_with_id(user_id, output_path, file.filename)
+                await self.storage_writer.async_write_from_fastapi_uploadfile_to_file(file, rel_fpath_with_id)
+        except FileNotFoundError:
+            raise APIEntityDoesNotExists(output_path)
+        except Exception as e:
+            self.logger.log(e)
+            raise e
+
+    async def save_files_to_storage(self, user_id, path_in_storage, files: list):
+        if len(files) > self.max_upload_files:
+            raise APITooManyFiles
+        self.path_ensurer.ensure_path_safety(user_id, path_in_storage)
+        await self._iterate_and_save_files_to_storage(files, path_in_storage, str(user_id))
+
+from app.routes.authorization.router import auth_handler
+from depends import AuthDepend
+
+auth_depend = AuthDepend(auth_handler)
 from redis import Redis
 
 from utils import Logger, TimeHandler, PathCutter, PathJoiner, PathValidEnsurer, Hasher
@@ -1016,7 +1048,7 @@ user_getter = UserGetter(user_reader, session_reader, redis_cacher, session_vali
 user_registrator = UserRegistration(user_actor, hasher, logger)
 user_authenticator = UserAuthentication(user_reader, session_maker, user_getter, logger, hasher)
 session_deleter = SessionDeleter(redis_cacher, session_actor)from fastapi import FastAPI
-from routes import storage_acting_router, view_storage_router ,auth_router ,download_router ,upload_router
+from .routes import download_router, auth_router, upload_router ,storage_acting_router ,view_storage_router
 
 app = FastAPI()
 
@@ -1024,46 +1056,7 @@ app.include_router(view_storage_router)
 app.include_router(storage_acting_router)
 app.include_router(download_router)
 app.include_router(upload_router)
-app.include_router(auth_router)from .storage_view import ViewStorageResponsefrom pydantic import BaseModel
-from typing import List
-
-
-class ViewStorageResponse(BaseModel):
-    entities: listfrom .view_storage import ViewStorageRootQuery, ViewStorageQuery
-from .upload import UploadQuery, MakeDirInStorageQuery
-from .download import DownloadQuery
-from .auth import SignUpQuery, AuthenticateQueryfrom pydantic import BaseModel, Field
-
-
-class DownloadQuery(BaseModel):
-    entity_path_in_storage: str
-from pydantic import BaseModel, Field
-
-class ViewStorageRootQuery(BaseModel):
-    user_id: int = Field(ge=0)
-
-class ViewStorageQuery(BaseModel):
-    user_id: int = Field(ge=0)
-from pydantic import BaseModel, Field
-
-
-class UploadQuery(BaseModel):
-    path_in_storage: str | None = None
-
-class MakeDirInStorageQuery(BaseModel):
-    path_in_storage: str | None = None
-    name: str
-
-from pydantic import BaseModel, Field
-
-
-class SignUpQuery(BaseModel):
-    name: str = Field(max_length=16, min_length=1)
-    password: str = Field(max_length=255)
-
-class AuthenticateQuery(BaseModel):
-    name: str
-    password: strfrom datetime import datetime
+app.include_router(auth_router)from datetime import datetime
 
 
 print(datetime.astimezone())from werkzeug.security import generate_password_hash, check_password_hash

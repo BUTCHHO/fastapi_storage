@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from routes import storage_acting_router, view_storage_router ,auth_router ,download_router ,upload_router
+from .routes import download_router, auth_router, upload_router ,storage_acting_router ,view_storage_router
 
 app = FastAPI()
 
