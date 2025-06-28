@@ -1,1 +1,2 @@
 from .make_dir_handler import MakeDirHandler
+from .delete_dir_handler import DeleteEntityHandler

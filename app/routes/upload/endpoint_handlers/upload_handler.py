@@ -9,8 +9,11 @@ class UploadFileHandler:
         self.logger: ILogger = logger
         self.max_upload_files = 20
 
-    def create_rel_fpath_with_id(self, user_id, rel_path, fname):
+    def create_rel_fpath_with_id(self, user_id, rel_path, fname:str):
+        fname = fname.lstrip('/') #I DONT FUCKING KNOW WHY BUT PATHLIB REFUSES TO JOIN FUCKING PATHS/ IT JUST RETURNS FNAME AS IT WAS IF WE DONT REMOVE THIS SLASH
+        print(fname)
         fpath_and_name = self.join_fpath_and_fname(rel_path, fname)
+        fpath_and_name = fpath_and_name.lstrip('/') # THE SAME PROBLEM
         return self.path_joiner.join_paths(user_id, fpath_and_name)
 
     def join_fpath_and_fname(self, fpath, fname):
@@ -20,6 +23,7 @@ class UploadFileHandler:
         try:
             for file in files:
                 rel_fpath_with_id = self.create_rel_fpath_with_id(user_id, output_path, file.filename)
+                print(rel_fpath_with_id)
                 await self.storage_writer.async_write_from_fastapi_uploadfile_to_file(file, rel_fpath_with_id)
         except FileNotFoundError:
             raise APIEntityDoesNotExists(output_path)
@@ -30,6 +34,8 @@ class UploadFileHandler:
     async def save_files_to_storage(self, user_id, path_in_storage, files: list):
         if len(files) > self.max_upload_files:
             raise APITooManyFiles
+        if path_in_storage is None:
+            path_in_storage = ''
         self.path_ensurer.ensure_path_safety(user_id, path_in_storage)
         await self._iterate_and_save_files_to_storage(files, path_in_storage, str(user_id))
 

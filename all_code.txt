@@ -109,9 +109,9 @@ class APIPathGoesBeyondLimits(HTTPException):
         super().__init__(status_code=status_code, detail=detail)
 
 class APIEntityDoesNotExists(HTTPException):
-    def __init__(self, path_in_storage, detail=None, status_code=404):
-        if not detail:
-            detail = {"message": f'entity at {path_in_storage} does not exists', "code": 'entity_does_not_exists'}
+    def __init__(self, path_in_storage):
+        detail = {"message": f'entity at {path_in_storage} does not exists', "code": 'entity_does_not_exists'}
+        status_code = 404
         super().__init__(status_code=status_code, detail=detail)
 
 class APIUnsupportedEntityType(HTTPException):
@@ -256,7 +256,8 @@ def test_ensurer_goes_beyond_limits():
     is_safe = not ensurer.is_goes_beyond_limits(safe_path)
     assert is_unsafe == is_unsafe_rel == is_safe == True
 from .auth import AuthDependfrom fastapi import Request
-
+from exceptions.auth_http_exc import APIIncorrectPassword, APIUserDontExists
+from exceptions.auth import IncorrectPassword, UserDontExists
 
 class AuthDepend:
     def __init__(self, auth_handler):
@@ -265,6 +266,14 @@ class AuthDepend:
     def auth(self, request: Request):
         session_id = request.cookies.get('session_id')
         return self.auth_handler.auth_with_session_id(session_id)
+
+    def ask_for_password(self, password, user):
+        try:
+            self.auth_handler.check_password(password, user)
+        except IncorrectPassword:
+            raise APIIncorrectPassword
+        except UserDontExists:
+            raise UserDontExists('')
 from dotenv import load_dotenv
 from os import getenv
 
@@ -401,6 +410,8 @@ class IStorageWriter(ABC):
     def create_dir(self, path: str, name: str, exist_ok=True): pass
     @abstractmethod
     def create_file(self, path: str, name: str, exist_ok=True): pass
+    @abstractmethod
+    def delete_entity(self, path: str | None) -> None: pass
 
 class IArchivator(ABC):
     @abstractmethod
@@ -589,7 +600,7 @@ class UserAuthentication:
     def validate_user_and_password(self, user_name, user, psw):
         if not user:
             raise UserDontExists(user_name)
-        if not self.hasher.checK_password(psw, user.password):
+        if not self.hasher.check_password(psw, user.password):
             raise IncorrectPassword
 
     def _make_session(self, user_id):
@@ -798,31 +809,39 @@ class StorageViewHandler:
 
         except Exception as e:
             self.logger.log(e)
-from .router import storage_acting_routerfrom fastapi import APIRouter, Depends, Query
+from .router import storage_acting_routerfrom aiofiles.threadpool.utils import delegate_to_executor
+from fastapi import APIRouter, Depends, Query
 
-from .schemas.query import MakeDirInStorageQuery
-from .endpoint_handlers import MakeDirHandler
+from .schemas.query import MakeDirInStorageQuery, DeleteEntityQuery
+from .endpoint_handlers import MakeDirHandler, DeleteEntityHandler
 from app.singletones import logger, storage_writer, path_joiner, path_ensurer
 from app.routes.dependencies import auth_depend
 
 storage_acting_router = APIRouter()
 
 make_dir_handler = MakeDirHandler(logger, storage_writer, path_joiner, path_ensurer)
-
+delete_entity_handler = DeleteEntityHandler(path_ensurer, storage_writer, path_joiner, logger)
 
 
 @storage_acting_router.post('/make-dir-in-storage')
 def make_dir_in_storage(user=Depends(auth_depend.auth), params: MakeDirInStorageQuery = Query()):
     make_dir_handler.make_dir_in_storage(user.id, params.path_in_storage, params.name)
 
-# @storage_acting_router.delete('/delete-entity-in-storage')
-# def delete_entity(user=Depends(auth_depend.auth), params: DeleteEntityQuery = Query()):
+@storage_acting_router.delete('/delete-entity-in-storage')
+def delete_entity(user=Depends(auth_depend.auth), params: DeleteEntityQuery = Query()):
+    auth_depend.ask_for_password(params.password, user)
+    delete_entity_handler.delete_entity(str(user.id), params.path_in_storage)
 from pydantic import BaseModel, Field
 
 
 class MakeDirInStorageQuery(BaseModel):
     path_in_storage: str | None = None
-    name: str = Field(max_length=255, min_length=1)from interfaces import IStorageWriter
+    name: str = Field(max_length=255, min_length=1)
+
+class DeleteEntityQuery(BaseModel):
+    password: str
+    path_in_storage: str
+from interfaces import IStorageWriter
 from exceptions import APIDirectoryAlreadyExists
 
 
@@ -841,7 +860,29 @@ class MakeDirHandler:
             path_with_user_id = self.path_joiner.join_paths(str(user_id), path)
             self.storage_writer.create_dir(path_with_user_id, name)
         except FileExistsError:
-            raise APIDirectoryAlreadyExistsfrom .make_dir_handler import MakeDirHandlerfrom .router import auth_routerfrom fastapi import APIRouter, Request, Response, Query
+            raise APIDirectoryAlreadyExistsfrom .make_dir_handler import MakeDirHandler
+from .delete_dir_handler import DeleteEntityHandlerfrom interfaces import IStorageWriter
+from exceptions import EntityDoesNotExists, APIEntityDoesNotExists
+
+
+class DeleteEntityHandler:
+    def __init__(self, path_ensurer, storage_writer, path_joiner, logger):
+        self.path_ensurer = path_ensurer
+        self.storage_writer: IStorageWriter = storage_writer
+        self.path_joiner = path_joiner
+        self.logger = logger
+
+    def delete_entity(self, user_id, path_in_storage):
+        try:
+            if path_in_storage is None:
+                path_in_storage = ''
+            path_with_user_id = self.path_joiner.join_paths(user_id, path_in_storage)
+            self.path_ensurer.ensure_path_safety(user_id, path_in_storage)
+            self.storage_writer.delete_entity(path_with_user_id)
+        except EntityDoesNotExists:
+            raise APIEntityDoesNotExists(path_in_storage)
+        except Exception as e:
+            self.logger.log(e)from .router import auth_routerfrom fastapi import APIRouter, Request, Response, Query
 from .endpoint_handlers import SignUpHandler, LogOutHandler, AuthHandler
 from app.singletones import session_deleter, logger, user_reader, storage_writer, user_registrator, user_authenticator
 from .schemas.query import AuthenticateQuery, SignUpQuery
@@ -889,6 +930,9 @@ class AuthHandler:
     def set_session_id_cookie(self, session_id, response: Response):
         response.set_cookie(key="session_id", value=session_id, max_age=SESSION_COOKIES_EXPIRE_TIME,
                             samesite='lax', httponly=True)
+
+    def check_password(self, password, user):
+        self.authenticator.validate_user_and_password('', user, password)
 
     def auth_with_psw_and_set_session_cookie(self, name, password, response: Response):
         try:
@@ -965,7 +1009,13 @@ upload_handler = UploadFileHandler(storage_writer, path_ensurer, logger, path_jo
 
 @upload_router.post('/upload-entity')
 async def upload_entity_endpoint(files: list[UploadFile], params: UploadQuery = Query(), user=Depends(auth_depend.auth)):
-    await upload_handler.save_files_to_storage(user.id, params.path_in_storage, files)
+    #TODO это дерьмо не работает
+    # если пытатсься создать файл прямо в корне директории юзера, то пазлиб вместо ттго чтобы ОБЪЕДИНИТЬ ЭТИ ДВА ПУТИ возвращает имя файла как оно есть
+    # Я ВООБЗЕ НЕ НЗАЮ ПОЧЕМУ ТАК Я НИКАК НЕ МЕНЯЛ ЛОГИКУ РАБОТЫ
+    #
+
+
+    await upload_handler.save_files_to_storage(str(user.id), params.path_in_storage, files)
     return {"message": 'successfully uploaded files'}
 from pydantic import BaseModel
 
@@ -988,8 +1038,11 @@ class UploadFileHandler:
         self.logger: ILogger = logger
         self.max_upload_files = 20
 
-    def create_rel_fpath_with_id(self, user_id, rel_path, fname):
+    def create_rel_fpath_with_id(self, user_id, rel_path, fname:str):
+        fname = fname.lstrip('/') #I DONT FUCKING KNOW WHY BUT PATHLIB REFUSES TO JOIN FUCKING PATHS/ IT JUST RETURNS FNAME AS IT WAS IF WE DONT REMOVE THIS SLASH
+        print(fname)
         fpath_and_name = self.join_fpath_and_fname(rel_path, fname)
+        fpath_and_name = fpath_and_name.lstrip('/') # THE SAME PROBLEM
         return self.path_joiner.join_paths(user_id, fpath_and_name)
 
     def join_fpath_and_fname(self, fpath, fname):
@@ -999,6 +1052,7 @@ class UploadFileHandler:
         try:
             for file in files:
                 rel_fpath_with_id = self.create_rel_fpath_with_id(user_id, output_path, file.filename)
+                print(rel_fpath_with_id)
                 await self.storage_writer.async_write_from_fastapi_uploadfile_to_file(file, rel_fpath_with_id)
         except FileNotFoundError:
             raise APIEntityDoesNotExists(output_path)
@@ -1009,6 +1063,8 @@ class UploadFileHandler:
     async def save_files_to_storage(self, user_id, path_in_storage, files: list):
         if len(files) > self.max_upload_files:
             raise APITooManyFiles
+        if path_in_storage is None:
+            path_in_storage = ''
         self.path_ensurer.ensure_path_safety(user_id, path_in_storage)
         await self._iterate_and_save_files_to_storage(files, path_in_storage, str(user_id))
 
@@ -1067,7 +1123,7 @@ class Hasher:
     def generate_psw_hash(self, password):
         return generate_password_hash(password)
 
-    def checK_password(self, password, hashed_psw):
+    def check_password(self, password, hashed_psw):
         return check_password_hash(hashed_psw, password)
 
     def create_session_id_hash(self):
@@ -1125,7 +1181,7 @@ class PathJoiner:
 
 
     def join_paths(self, path1, path2):
-        new_path = Path(Path(path1) / Path(path2))
+        new_path = Path(path1, path2)
         return new_path.__str__()
 
     def join_with_root_path(self, path:str | int):
@@ -1305,102 +1361,6 @@ class Session(Base):
 
 Base.metadata.create_all(bind=engine)
 
-from .directory_reader import StorageReader
-from .archivator import Archivator
-from .storage_writer import StorageWriterfrom aiofiles import open as aio_open
-from pathlib import Path
-
-
-class StorageWriter:
-    def __init__(self, root_dir_abs_path: str):
-        if not isinstance(root_dir_abs_path, str):
-            raise TypeError(f'root_dir_abs_path argument must be str, not {type(root_dir_abs_path)}')
-        self.root_dir = Path(root_dir_abs_path)
-
-    def create_dir(self, path: str | None, name:str, exist_ok=True):
-        """
-        Creates directory/folder in specified path with specified name
-        :param path: Path to the location of the future directory.
-        The path must be relative to the root directory, which is passed as an argument to __init__ as root_dir_abs_path.
-        This rule is used in every object where root_dir_abs_path is passed during initialization.
-        you can set path param as empty string if you need to make dir in root_ dir
-        :param name: name of dir
-        :return: None
-        """
-        if path is None:
-            path = ''
-        if not isinstance(path, str):
-            raise TypeError(f'path argument must be str, not {type(path)}')
-        if not isinstance(name, str):
-            raise TypeError(f'name argument must be str, not {type(path)}')
-        root_dir = Path(self.root_dir, path, name)
-        root_dir.mkdir(exist_ok=exist_ok)
-
-    def create_file(self, path: str | None , name: str, exist_ok):
-        """
-        Create file in specified path with specified name
-        :param path: Path to the location of the future file.
-        The path must be relative to the root directory, which is passed as an argument to __init__ as root_dir_abs_path.
-        This rule is used in every object where root_dir_abs_path is passed during initialization.
-        you can set path param as empty string if you need to make file in root_ dir
-        :param name: name of file
-        :return: None
-        """
-        if path is None:
-            path = ''
-        if not isinstance(path, str):
-            raise TypeError(f'path argument must be str, not {type(path)}')
-        if not isinstance(name, str):
-            raise TypeError(f'name argument must be str, not {type(path)}')
-        path_to_future_file = Path(self.root_dir, path, name)
-        path_to_future_file.touch(exist_ok=exist_ok)
-
-    async def async_write_from_fastapi_uploadfile_to_file(self, source_file, output_file_path, exist_ok=True):
-        """
-        special method for fastapi uploading file to hard disk
-        :param source_file: fastapi UploadFile object
-        :param output_file_path: path where an actual file will be saved on hard disk
-        :return: None
-        """
-        output_file_path = Path(self.root_dir, output_file_path)
-        async with aio_open(output_file_path, 'wb') as output_file:
-            while content := await source_file.read(1024):
-                await output_file.write(content)from pathlib import Path
-from tempfile import mkdtemp
-from zipfile import ZipFile, ZIP_DEFLATED
-
-
-class Archivator:
-    def __init__(self):
-        self._zip_path = None
-        self.tmp_dir = Path(mkdtemp())
-
-    def has_zip_path(self):
-        return self._zip_path is not None
-
-    def make_zip_in_tmp_dir(self, archivable_dir):
-        return self.tmp_dir / f"{archivable_dir.name}.zip"
-
-    def write_from_dir_to_zip(self, dir, zip):
-        with ZipFile(zip, mode='w', compression=ZIP_DEFLATED, allowZip64=True, compresslevel=6) as zipf:
-            for file_path in dir.rglob('*'):
-                if file_path.is_file():
-                    entity = file_path.relative_to(dir)
-                    zipf.write(file_path, entity)
-
-    def cleanup_temp_files(self):
-        if self.has_zip_path():
-            self._cleanup()
-            self._zip_path = None
-
-    def _cleanup(self):
-        self._zip_path.unlink(missing_ok=True)
-
-    def create_large_zip(self, archivable_dir_path: str) -> Path:
-        archivable_dir = Path(archivable_dir_path)
-        self._zip_path = self.make_zip_in_tmp_dir(archivable_dir)
-        self.write_from_dir_to_zip(archivable_dir, self._zip_path)
-        return self._zip_path
 from pathlib import Path
 from exceptions import EntityDoesNotExists, EntityIsNotADir
 
@@ -1537,3 +1497,113 @@ class StorageReader:
 
 
 
+from .storage_reader import StorageReader
+from .archivator import Archivator
+from .storage_writer import StorageWriterimport shutil
+
+from aiofiles import open as aio_open
+from pathlib import Path
+from exceptions.path_exc import EntityDoesNotExists
+
+
+class StorageWriter:
+    def __init__(self, root_dir_abs_path: str):
+        if not isinstance(root_dir_abs_path, str):
+            raise TypeError(f'root_dir_abs_path argument must be str, not {type(root_dir_abs_path)}')
+        self.root_dir = Path(root_dir_abs_path)
+
+    def delete_entity(self, path: str | None):
+        entity = Path(self.root_dir, path)
+        if entity.exists():
+            if entity.is_dir():
+                shutil.rmtree(entity)
+            elif entity.is_file():
+                entity.unlink()
+        else:
+            raise EntityDoesNotExists(path)
+
+
+    def create_dir(self, path: str | None, name:str, exist_ok=True):
+        """
+        Creates directory/folder in specified path with specified name
+        :param path: Path to the location of the future directory.
+        The path must be relative to the root directory, which is passed as an argument to __init__ as root_dir_abs_path.
+        This rule is used in every object where root_dir_abs_path is passed during initialization.
+        you can set path param as empty string if you need to make dir in root_ dir
+        :param name: name of dir
+        :return: None
+        """
+        if path is None:
+            path = ''
+        if not isinstance(path, str):
+            raise TypeError(f'path argument must be str, not {type(path)}')
+        if not isinstance(name, str):
+            raise TypeError(f'name argument must be str, not {type(path)}')
+        root_dir = Path(self.root_dir, path, name)
+        root_dir.mkdir(exist_ok=exist_ok)
+
+    def create_file(self, path: str | None , name: str, exist_ok):
+        """
+        Create file in specified path with specified name
+        :param path: Path to the location of the future file.
+        The path must be relative to the root directory, which is passed as an argument to __init__ as root_dir_abs_path.
+        This rule is used in every object where root_dir_abs_path is passed during initialization.
+        you can set path param as empty string if you need to make file in root_ dir
+        :param name: name of file
+        :return: None
+        """
+        if path is None:
+            path = ''
+        if not isinstance(path, str):
+            raise TypeError(f'path argument must be str, not {type(path)}')
+        if not isinstance(name, str):
+            raise TypeError(f'name argument must be str, not {type(path)}')
+        path_to_future_file = Path(self.root_dir, path, name)
+        path_to_future_file.touch(exist_ok=exist_ok)
+
+    async def async_write_from_fastapi_uploadfile_to_file(self, source_file, output_file_path, exist_ok=True):
+        """
+        special method for fastapi uploading file to hard disk
+        :param source_file: fastapi UploadFile object
+        :param output_file_path: path where an actual file will be saved on hard disk
+        :return: None
+        """
+        output_file_path = Path(self.root_dir, output_file_path)
+        async with aio_open(output_file_path, 'wb') as output_file:
+            while content := await source_file.read(1024):
+                await output_file.write(content)from pathlib import Path
+from tempfile import mkdtemp
+from zipfile import ZipFile, ZIP_DEFLATED
+
+
+class Archivator:
+    def __init__(self):
+        self._zip_path = None
+        self.tmp_dir = Path(mkdtemp())
+
+    def has_zip_path(self):
+        return self._zip_path is not None
+
+    def make_zip_in_tmp_dir(self, archivable_dir):
+        return self.tmp_dir / f"{archivable_dir.name}.zip"
+
+    def write_from_dir_to_zip(self, dir, zip):
+        with ZipFile(zip, mode='w', compression=ZIP_DEFLATED, allowZip64=True, compresslevel=6) as zipf:
+            for file_path in dir.rglob('*'):
+                if file_path.is_file():
+                    entity = file_path.relative_to(dir)
+                    zipf.write(file_path, entity)
+
+    def cleanup_temp_files(self):
+        if self.has_zip_path():
+            self._cleanup()
+            self._zip_path = None
+
+    def _cleanup(self):
+        self._zip_path.unlink(missing_ok=True)
+
+    def create_large_zip(self, archivable_dir_path: str) -> Path:
+        archivable_dir = Path(archivable_dir_path)
+        self._zip_path = self.make_zip_in_tmp_dir(archivable_dir)
+        self.write_from_dir_to_zip(archivable_dir, self._zip_path)
+        return self._zip_path

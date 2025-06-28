@@ -12,7 +12,7 @@ class PathJoiner:
 
 
     def join_paths(self, path1, path2):
-        new_path = Path(Path(path1) / Path(path2))
+        new_path = Path(path1, path2)
         return new_path.__str__()
 
     def join_with_root_path(self, path:str | int):

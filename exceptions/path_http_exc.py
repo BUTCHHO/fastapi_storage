@@ -7,9 +7,9 @@ class APIPathGoesBeyondLimits(HTTPException):
         super().__init__(status_code=status_code, detail=detail)
 
 class APIEntityDoesNotExists(HTTPException):
-    def __init__(self, path_in_storage, detail=None, status_code=404):
-        if not detail:
-            detail = {"message": f'entity at {path_in_storage} does not exists', "code": 'entity_does_not_exists'}
+    def __init__(self, path_in_storage):
+        detail = {"message": f'entity at {path_in_storage} does not exists', "code": 'entity_does_not_exists'}
+        status_code = 404
         super().__init__(status_code=status_code, detail=detail)
 
 class APIUnsupportedEntityType(HTTPException):

@@ -1,5 +1,8 @@
+import shutil
+
 from aiofiles import open as aio_open
 from pathlib import Path
+from exceptions.path_exc import EntityDoesNotExists
 
 
 class StorageWriter:
@@ -7,6 +10,17 @@ class StorageWriter:
         if not isinstance(root_dir_abs_path, str):
             raise TypeError(f'root_dir_abs_path argument must be str, not {type(root_dir_abs_path)}')
         self.root_dir = Path(root_dir_abs_path)
+
+    def delete_entity(self, path: str | None):
+        entity = Path(self.root_dir, path)
+        if entity.exists():
+            if entity.is_dir():
+                shutil.rmtree(entity)
+            elif entity.is_file():
+                entity.unlink()
+        else:
+            raise EntityDoesNotExists(path)
+
 
     def create_dir(self, path: str | None, name:str, exist_ok=True):
         """

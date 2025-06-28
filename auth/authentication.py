@@ -17,7 +17,7 @@ class UserAuthentication:
     def validate_user_and_password(self, user_name, user, psw):
         if not user:
             raise UserDontExists(user_name)
-        if not self.hasher.checK_password(psw, user.password):
+        if not self.hasher.check_password(psw, user.password):
             raise IncorrectPassword
 
     def _make_session(self, user_id):

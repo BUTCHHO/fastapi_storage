@@ -11,6 +11,9 @@ class AuthHandler:
         response.set_cookie(key="session_id", value=session_id, max_age=SESSION_COOKIES_EXPIRE_TIME,
                             samesite='lax', httponly=True)
 
+    def check_password(self, password, user):
+        self.authenticator.validate_user_and_password('', user, password)
+
     def auth_with_psw_and_set_session_cookie(self, name, password, response: Response):
         try:
             session_id = self.authenticator.make_session_by_name_and_psw(name, password)

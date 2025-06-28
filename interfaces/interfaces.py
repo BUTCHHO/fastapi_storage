@@ -20,6 +20,8 @@ class IStorageWriter(ABC):
     def create_dir(self, path: str, name: str, exist_ok=True): pass
     @abstractmethod
     def create_file(self, path: str, name: str, exist_ok=True): pass
+    @abstractmethod
+    def delete_entity(self, path: str | None) -> None: pass
 
 class IArchivator(ABC):
     @abstractmethod
