@@ -17,7 +17,6 @@ class User(Base):
     password = Column(String(255))
     name = Column(String(30), unique=True)
     is_admin = Column(Boolean, default=False)
-    owning_dir_id = Column(Integer, unique=True)
 
 class Session(Base):
     __tablename__ = "sessions"
