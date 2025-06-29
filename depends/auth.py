@@ -1,6 +1,7 @@
 from fastapi import Request
-from exceptions.auth_http_exc import APIIncorrectPassword, APIUserDontExists
-from exceptions.auth import IncorrectPassword, UserDontExists
+from exceptions.auth_http_exc import APIIncorrectPassword
+from exceptions.auth import IncorrectPassword, UserDontExists, Unauthorized
+from exceptions.auth_http_exc import APIUnauthorized
 
 class AuthDepend:
     def __init__(self, auth_handler):

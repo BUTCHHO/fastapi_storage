@@ -1,6 +1,7 @@
 from fastapi import Response
 
-from exceptions import APIIncorrectPassword, APIUserDontExists, IncorrectPassword, UserDontExists, APIUnauthorized, APISessionDontExists, APISessionExpired, SessionExpired, SessionDontExists
+from exceptions import APIIncorrectPassword, APIUserDontExists, IncorrectPassword, UserDontExists, Unauthorized, \
+    APISessionDontExists, APISessionExpired, SessionExpired, SessionDontExists, APIUnauthorized
 from config import SESSION_COOKIES_EXPIRE_TIME
 
 class AuthHandler:
@@ -28,9 +29,11 @@ class AuthHandler:
             if session_id is None:
                 raise APIUnauthorized
             return self.authenticator.auth_by_session_id(session_id)
-
+        except UserDontExists:
+            raise APIUserDontExists
         except SessionExpired:
             raise APISessionExpired
         except SessionDontExists:
             raise APISessionDontExists
+
 

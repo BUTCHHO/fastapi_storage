@@ -1,5 +1,5 @@
 from interfaces import IModelReader
-from exceptions import UserDontExists, IncorrectPassword, SessionExpired
+from exceptions import UserDontExists, IncorrectPassword, SessionExpired, APIUserDontExists, APISessionExpired
 
 
 class UserAuthentication:

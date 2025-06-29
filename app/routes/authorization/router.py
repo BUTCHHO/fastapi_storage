@@ -27,7 +27,6 @@ def authenticate(response: Response, params: AuthenticateQuery = Query()):
     auth_handler.auth_with_psw_and_set_session_cookie(params.name, params.password, response)
     return {"message": 'successfully logged_in'}
 
-from jinja2
 
 
 

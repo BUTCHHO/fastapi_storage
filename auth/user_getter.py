@@ -1,4 +1,5 @@
-from exceptions import SessionExpired, SessionDontExists
+from exceptions import SessionExpired, SessionDontExists, UserDontExists
+
 
 class UserGetter:
     def __init__(self, user_reader, session_reader, cacher, session_validator):
@@ -26,5 +27,7 @@ class UserGetter:
         if not user_id:
             return self._get_user_if_session_not_in_cache(session_id)
         user_id = int(user_id)
-        return self._get_user_from_db(user_id)
-
+        user = self._get_user_from_db(user_id)
+        if user is None:
+            raise UserDontExists
+        return user

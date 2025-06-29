@@ -8,9 +8,9 @@ class APIUserAlreadyExists(HTTPException):
         super().__init__(status_code, detail)
 
 class APIUserDontExists(HTTPException):
-    def __init__(self, name, detail=None, status_code = 404):
-        if not detail:
-            detail = {"message": f'User with name {name} dont exists', "code": 'user_dont_exists'}
+    def __init__(self, name=None):
+        detail = {"message": f'User with name {name} dont exists', "code": 'user_dont_exists'}
+        status_code = 404
         super().__init__(status_code, detail)
 
 class APIIncorrectPassword(HTTPException):
