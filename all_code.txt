@@ -419,6 +419,8 @@ class IStorageReader(ABC):
     def join_with_root_path(self, path:str) -> str: pass
     @abstractmethod
     def get_all_entitynames_in_dir(self, path: str) -> list[str]: pass
+    @abstractmethod
+    def find_entities_path(self, searching_in: str | None, pattern: str) -> list[str]: pass
 
 class IStorageWriter(ABC):
     @abstractmethod
@@ -686,6 +688,7 @@ class UserRegistration:
 
 
 from .router import browser_routerfrom .browser_endpoint_handler import BrowserEndpointHandlerfrom fastapi import HTTPException
+from markdown_it.common.entities import entities
 
 from exceptions import APIEntityDoesNotExists, EntityDoesNotExists
 from interfaces import ILogger, IStorageReader, IPathCutter
@@ -721,13 +724,24 @@ class BrowserEndpointHandler:
             return entitynames
         except EntityDoesNotExists:
             raise APIEntityDoesNotExists(path_in_storage)
-
-        except HTTPException as e:
-            raise e
-
         except Exception as e:
             self.logger.log(e)
-from fastapi.templating import Jinja2Templates
+
+    def _recursively_get_entities_by_pattern(self, pattern:str, searching_in):
+        entities = self.storage_reader.find_entities_path(searching_in, pattern)
+        return entities
+
+    def search_entities_by_pattern(self, user_id: str, pattern: str, searching_in: str):
+        try:
+            pattern = f'{pattern}*'
+            if searching_in is None:
+                searching_in = ''
+            self.path_ensurer.ensure_path_safety(user_id, searching_in)
+            searching_in_path_with_id = self.path_joiner.join_paths(user_id, searching_in)
+            entities = self._recursively_get_entities_by_pattern(pattern, searching_in_path_with_id)
+            return self._cut_user_id_from_entitynames(entities)
+        except Exception as e:
+            self.logger.log(e)from fastapi.templating import Jinja2Templates
 
 class BrowserViewHandler:
     def __init__(self, jinja2_templates):
@@ -743,8 +757,8 @@ from fastapi.responses import HTMLResponse
 
 from app.singletones import storage_reader, logger, path_joiner, path_cutter, path_ensurer
 from .handlers.browser_view_handler import BrowserViewHandler
-from .schemas.response import ViewStorageResponse
-from .schemas.query import ViewStorageQuery
+from .schemas.response import GetEntitiesResponse, SearchEntitiesResponse
+from .schemas.query import BrowserGetEntitiesQuery, BrowserSearchEntitiesQuery
 from .handlers import BrowserEndpointHandler
 from app.routes.dependencies import auth_depend
 
@@ -763,10 +777,15 @@ templates = Jinja2Templates(directory=[templates_dir, global_templates_dir])
 browser_endpoint_handler = BrowserEndpointHandler(storage_reader, logger, path_joiner, path_cutter, path_ensurer)
 browser_view_handler = BrowserViewHandler(templates)
 
-@browser_router.get('/_get_entities', response_model=ViewStorageResponse)
-def get_entities_in_storage(params: ViewStorageQuery = Query(),
-                         user=Depends(auth_depend.auth)):
+@browser_router.get('/_get_entities', response_model=GetEntitiesResponse)
+def get_entities_in_storage(params: BrowserGetEntitiesQuery = Query(),
+                            user=Depends(auth_depend.auth)):
     entities = browser_endpoint_handler.get_list_of_entities(user.id, params.path_in_storage)
+    return {"entities": entities}
+
+@browser_router.get('/_get_entities/search', response_model=SearchEntitiesResponse)
+def search_entities_by_pattern(user=Depends(auth_depend.auth), params: BrowserSearchEntitiesQuery = Query()):
+    entities = browser_endpoint_handler.search_entities_by_pattern(str(user.id), params.pattern, params.searching_in_path)
     return {"entities": entities}
 
 @browser_router.get('/browser', response_class=HTMLResponse)
@@ -776,12 +795,19 @@ def view_storage(request: Request, user=Depends(auth_depend.auth_allow_unauthori
 from pydantic import BaseModel
 
 
-class ViewStorageResponse(BaseModel):
-    entities: listfrom pydantic import BaseModel
+class GetEntitiesResponse(BaseModel):
+    entities: list[str] | list
+
+class SearchEntitiesResponse(BaseModel):
+    entities: list[str] | listfrom pydantic import BaseModel, Field
 
 
-class ViewStorageQuery(BaseModel):
-    path_in_storage: str | None = Nonefrom .browser import browser_router
+class BrowserGetEntitiesQuery(BaseModel):
+    path_in_storage: str | None = None
+
+class BrowserSearchEntitiesQuery(BaseModel):
+    searching_in_path: str | None = None
+    pattern: strfrom .browser import browser_router
 from .storage_acting import storage_acting_router
 from .upload import upload_router
 from .authorization import auth_router
@@ -988,7 +1014,8 @@ class SignUpQuery(BaseModel):
 
 class AuthenticateQuery(BaseModel):
     name: str
-    password: strfrom fastapi import Response
+    password: str
+from fastapi import Response
 
 from exceptions import APIIncorrectPassword, APIUserDontExists, IncorrectPassword, UserDontExists, Unauthorized, \
     APISessionDontExists, APISessionExpired, SessionExpired, SessionDontExists, APIUnauthorized
