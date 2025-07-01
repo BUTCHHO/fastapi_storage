@@ -1,5 +1,5 @@
 from interfaces import IModelReader
-from exceptions import UserDontExists, IncorrectPassword, SessionExpired, APIUserDontExists, APISessionExpired
+from .exceptions import UserDontExists, IncorrectPassword
 
 
 class UserAuthentication:
@@ -25,6 +25,8 @@ class UserAuthentication:
 
     def make_session_by_name_and_psw(self, name, psw):
         user = self._get_user_by_name(name)
+        if user is None:
+            raise UserDontExists
         self.validate_user_and_password(name, user, psw)
         session_id = self._make_session(user.id)
         return session_id

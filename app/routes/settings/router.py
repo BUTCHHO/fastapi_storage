@@ -1,13 +1,24 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request, Response
 
 from ..dependencies import auth_depend
 from .schemas.query import AccountDeleteQuery
+from app.singletones import user_deleter, logger, user_logouter
+
+from .endpoint_handlers import SettingsHandler
 
 settings_router = APIRouter()
 
+settings_handler = SettingsHandler(user_deleter, logger, user_logouter)
+
+#TODO need to delete or safe-delete user's storage
+
 
 @settings_router.delete('/settings/delete_acc')
-def delete_account(user=Depends(auth_depend.auth), params: AccountDeleteQuery = Query()):
+def delete_user(request: Request,
+                response: Response,
+                user=Depends(auth_depend.auth),
+                params: AccountDeleteQuery = Query()):
+
     auth_depend.ask_for_password(password=params.password, user=user)
-    #TODO ушёл спать. НАДО доделать
-    return {"message": 'not implemented'}
+    settings_handler.delete_account(user.id, request, response)
+    return {"message": 'successfully deleted account'}

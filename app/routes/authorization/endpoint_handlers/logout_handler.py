@@ -1,18 +1,17 @@
 from fastapi import Request, Response
 
+from exceptions.database_repo import FieldUniqueViolation
+
 
 class LogOutHandler:
-    def __init__(self, session_deleter, logger):
-        self.session_deleter = session_deleter
+    def __init__(self, user_logouter, logger):
+        self.logouter = user_logouter
         self.logger = logger
 
     def logout_user(self, request: Request, response: Response):
         try:
-            session_id = request.cookies.get('session_id')
-            if session_id is None:
-                return
-            response.delete_cookie('session_id')
-            self.session_deleter.delete_session(session_id)
+            self.logouter.logout_user(request, response)
+        except FieldUniqueViolation:
+            return
         except Exception as e:
             self.logger.log(e)
-            raise e

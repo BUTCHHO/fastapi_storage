@@ -1,3 +1,7 @@
+from sqlalchemy.exc import IntegrityError
+from psycopg2.errors import UniqueViolation
+from exceptions.database_repo import FieldUniqueViolation
+
 from .parent_access import ParentAccess
 
 class ModelActor(ParentAccess):
@@ -8,19 +12,32 @@ class ModelActor(ParentAccess):
         record = self.create_record(**kwargs)
         self.write_record_to_db(record)
 
+
+
+
+
     def write_record_to_db(self, record):
-        session = self.session()
-        try:
-            session.add(record)
-            session.commit()
-        finally:
-            session.close()
+            session = self.session()
+            try:
+                session.add(record)
+                session.commit()
+            except IntegrityError as integrity_error:
+                if isinstance(integrity_error.orig, UniqueViolation):
+                    raise FieldUniqueViolation()
+                raise
+            except Exception as e:
+                session.rollback()
+                self.logger.log(e)
+            finally:
+                session.close()
+
 
     def create_record(self, **kwargs):
         try:
             return self.model(**kwargs)
         except Exception as e:
             self.logger.log(e)
+            raise
 
     def delete_record_by_id(self, id):
         session = self.session()

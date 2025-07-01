@@ -22,7 +22,7 @@ class Session(Base):
     __tablename__ = "sessions"
 
     id = Column(String(50), primary_key=True)
-    user_id = Column(Integer, ForeignKey(User.id))
+    user_id = Column(Integer, ForeignKey(User.id), unique=True)
     expire_date = Column(Date)
 
 Base.metadata.create_all(bind=engine)

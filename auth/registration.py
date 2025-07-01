@@ -1,6 +1,5 @@
-from exceptions import UserAlreadyExists
-from sqlalchemy.exc import IntegrityError
-from psycopg2.errors import UniqueViolation
+from .exceptions import UserAlreadyExists
+from exceptions.database_repo import FieldUniqueViolation
 
 class UserRegistration:
     def __init__(self,user_actor, hasher, logger):
@@ -12,8 +11,7 @@ class UserRegistration:
         try:
             password = self.hasher.generate_psw_hash(password)
             self._user_actor.create_and_write_record_to_db(name=name, password=password)
-        except IntegrityError as integrity_error:
-            if isinstance(integrity_error.orig, UniqueViolation):
+        except FieldUniqueViolation:
                 raise UserAlreadyExists(name)
         except Exception as e:
             self.logger.log(e)

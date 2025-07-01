@@ -1,4 +1,4 @@
-from exceptions import SessionExpired, SessionDontExists, UserDontExists
+from .exceptions import SessionDontExists
 
 
 class UserGetter:

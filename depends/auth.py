@@ -2,7 +2,7 @@ from fastapi import Request
 
 from exceptions import APIUserDontExists
 from exceptions.auth_http_exc import APIIncorrectPassword
-from exceptions.auth import IncorrectPassword, UserDontExists, Unauthorized
+from auth.exceptions import IncorrectPassword, UserDontExists
 from exceptions.auth_http_exc import APIUnauthorized
 
 class AuthDepend:

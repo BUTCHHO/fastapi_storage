@@ -1,5 +1,5 @@
 from interfaces import ITimeHandler
-from exceptions import SessionExpired
+from .exceptions import SessionExpired
 
 class SessionValidator:
     def __init__(self, time_handler, session_deleter):

@@ -11,10 +11,9 @@ class APITooManyFiles(HTTPException):
         status_code = 429
         super().__init__(detail, status_code)from .path_http_exc import APIPathGoesBeyondLimits, APIUserStorageAlreadyExists, APIDirectoryAlreadyExists, APIEntityDoesNotExists, APIUnsupportedEntityType
 from .exc import NotAUserId
-from .auth import UserAlreadyExists, Unauthorized, UserDontExists, IncorrectPassword, SessionExpired, SessionDontExists
+from .path_exc import EntityDoesNotExists, EntityIsNotADir
 from .auth_http_exc import APIUserAlreadyExists, APIUserDontExists, APIIncorrectPassword, APISessionDontExists, APISessionExpired, APIUnauthorized
 from .config_exc import StoragePathIsNone, DatabaseUrlIsNone, CacheHostIsNone, CachePortIsNone, CacheExpireTimeIsNone, SessionMakerKeyIsNone
-from .path_exc import EntityDoesNotExists, EntityIsNotADir
 from .http_files_exc import APITooManyFilesclass StoragePathIsNone(Exception):
     def __init__(self):
         msg = 'STORAGE_PATH value from .env file is None. Must be filled'
@@ -43,32 +42,7 @@ class CacheExpireTimeIsNone(Exception):
 class SessionMakerKeyIsNone(Exception):
     def __init__(self):
         msg = 'SESSION_MAKER_KEY value from .env file is None. Must be filled'
-        super().__init__(msg)class UserAlreadyExists(Exception):
-    def __init__(self, name):
-        msg = f'User with name {name} already exists'
-        super().__init__(msg)
-
-class Unauthorized(Exception):
-    def __init__(self, name = None):
-        msg = f'user {name} unauthorized'
-        super().__init__(msg)
-
-class UserDontExists(Exception):
-    def __init__(self, name=None):
-        msg = f'User with name {name} does not exists'
-        super().__init__(msg)
-
-class IncorrectPassword(Exception):
-    def __init__(self):
-        super().__init__()
-
-class SessionExpired(Exception):
-    def __init__(self):
-        super().__init__()
-
-class SessionDontExists(Exception):
-    def __init__(self):
-        super().__init__()from fastapi.exceptions import HTTPException
+        super().__init__(msg)from fastapi.exceptions import HTTPException
 
 
 class APIUserAlreadyExists(HTTPException):
@@ -105,7 +79,12 @@ class APIUnauthorized(HTTPException):
     def __init__(self):
         detail = {"message": f'you have to log in to see this page', "code": 'unauthorized'}
         status_code = 401
-        super().__init__(status_code, detail)from fastapi import HTTPException
+        super().__init__(status_code, detail)class FieldUniqueViolation(Exception):
+    def __init__(self, **kwargs):
+        msg = f'Record with kwargs {kwargs} is violating unique flag'
+        super().__init__(msg)
+
+from fastapi import HTTPException
 
 class APIPathGoesBeyondLimits(HTTPException):
     def __init__(self, path_in_storage, detail=None, status_code=403):
@@ -264,7 +243,7 @@ from .auth import AuthDependfrom fastapi import Request
 
 from exceptions import APIUserDontExists
 from exceptions.auth_http_exc import APIIncorrectPassword
-from exceptions.auth import IncorrectPassword, UserDontExists, Unauthorized
+from auth.exceptions import IncorrectPassword, UserDontExists
 from exceptions.auth_http_exc import APIUnauthorized
 
 class AuthDepend:
@@ -312,7 +291,11 @@ assert CACHE_PORT is not None
 assert CACHE_HOST is not None
 assert CACHE_EXPIRE_TIME is not None
 from .reader import ModelReader
-from .actor import ModelActorfrom .parent_access import ParentAccess
+from .actor import ModelActorfrom sqlalchemy.exc import IntegrityError
+from psycopg2.errors import UniqueViolation
+from exceptions.database_repo import FieldUniqueViolation
+
+from .parent_access import ParentAccess
 
 class ModelActor(ParentAccess):
     def __init__(self, model, logger):
@@ -322,19 +305,32 @@ class ModelActor(ParentAccess):
         record = self.create_record(**kwargs)
         self.write_record_to_db(record)
 
+
+
+
+
     def write_record_to_db(self, record):
-        session = self.session()
-        try:
-            session.add(record)
-            session.commit()
-        finally:
-            session.close()
+            session = self.session()
+            try:
+                session.add(record)
+                session.commit()
+            except IntegrityError as integrity_error:
+                if isinstance(integrity_error.orig, UniqueViolation):
+                    raise FieldUniqueViolation()
+                raise
+            except Exception as e:
+                session.rollback()
+                self.logger.log(e)
+            finally:
+                session.close()
+
 
     def create_record(self, **kwargs):
         try:
             return self.model(**kwargs)
         except Exception as e:
             self.logger.log(e)
+            raise
 
     def delete_record_by_id(self, id):
         session = self.session()
@@ -537,10 +533,24 @@ class RedisCacher(Cacher):
         return self.client.exists(key)from interfaces import IModelActor
 
 
+class UserDeleter:
+    def __init__(self, user_actor):
+        self.user_actor: IModelActor = user_actor
+
+    def delete_user_by_id(self, user_id):
+        #make sure to delete session_id from user's cookies and from db
+        self.user_actor.delete_record_by_id(user_id)from interfaces import IModelActor
+from interfaces import IModelReader
+
 class SessionDeleter:
-    def __init__(self, cacher, session_actor):
+    def __init__(self, cacher, session_actor, session_reader):
         self.cacher = cacher
         self.session_actor: IModelActor = session_actor
+        self.session_reader: IModelReader = session_reader
+
+    def delete_session_by_user_id(self, user_id:str):
+        session = self.session_reader.get_by_kwargs(user_id=user_id)
+        self.delete_session(session.id)
 
     def delete_session(self, session_id):
         """
@@ -554,7 +564,8 @@ from .user_getter import UserGetter
 from .registration import UserRegistration
 from .session_validator import SessionValidator
 from .authentication import UserAuthentication
-from .session_deleter import SessionDeleterfrom exceptions import SessionExpired, SessionDontExists, UserDontExists
+from .session_deleter import SessionDeleter
+from .logout_user import UserLogoutfrom .exceptions import SessionDontExists
 
 
 class UserGetter:
@@ -586,7 +597,7 @@ class UserGetter:
         user = self._get_user_from_db(user_id)
         return user
 from interfaces import ITimeHandler
-from exceptions import SessionExpired
+from .exceptions import SessionExpired
 
 class SessionValidator:
     def __init__(self, time_handler, session_deleter):
@@ -604,7 +615,7 @@ class SessionValidator:
             raise SessionExpired()
         return True
 from interfaces import IModelReader
-from exceptions import UserDontExists, IncorrectPassword, SessionExpired, APIUserDontExists, APISessionExpired
+from .exceptions import UserDontExists, IncorrectPassword
 
 
 class UserAuthentication:
@@ -630,6 +641,8 @@ class UserAuthentication:
 
     def make_session_by_name_and_psw(self, name, psw):
         user = self._get_user_by_name(name)
+        if user is None:
+            raise UserDontExists
         self.validate_user_and_password(name, user, psw)
         session_id = self._make_session(user.id)
         return session_id
@@ -666,9 +679,8 @@ class SessionMaker:
         session_id = session.id
         self._access.write_record_to_db(session)
         self.cacher.put_data(session_id, user_id)
-        return session_idfrom exceptions import UserAlreadyExists
-from sqlalchemy.exc import IntegrityError
-from psycopg2.errors import UniqueViolation
+        return session_idfrom .exceptions import UserAlreadyExists
+from exceptions.database_repo import FieldUniqueViolation
 
 class UserRegistration:
     def __init__(self,user_actor, hasher, logger):
@@ -680,14 +692,55 @@ class UserRegistration:
         try:
             password = self.hasher.generate_psw_hash(password)
             self._user_actor.create_and_write_record_to_db(name=name, password=password)
-        except IntegrityError as integrity_error:
-            if isinstance(integrity_error.orig, UniqueViolation):
+        except FieldUniqueViolation:
                 raise UserAlreadyExists(name)
         except Exception as e:
             self.logger.log(e)
 
 
-from .router import browser_routerfrom .browser_endpoint_handler import BrowserEndpointHandlerfrom fastapi import HTTPException
+class UserLogout:
+    def __init__(self, session_deleter):
+        self.session_deleter = session_deleter
+
+
+
+    def logout_user(self, request, response):
+        """
+        :param response: something to get cookies from
+        :param request: something to put/delete cookies from
+        if your framework doesn't have something like this params then create class which wraps your framework's
+        cookies system and allows to use the call chain obj.cookies.get() & cookies.delete()
+        """
+        session_id = request.cookies.get('session_id')
+        if session_id is None:
+            return
+        response.delete_cookie('session_id')
+        self.session_deleter.delete_session(session_id)class UserAlreadyExists(Exception):
+    def __init__(self, name):
+        msg = f'User with name {name} already exists'
+        super().__init__(msg)
+
+class Unauthorized(Exception):
+    def __init__(self, name = None):
+        msg = f'user {name} unauthorized'
+        super().__init__(msg)
+
+class UserDontExists(Exception):
+    def __init__(self, name=None):
+        msg = f'User with name {name} does not exists'
+        super().__init__(msg)
+
+class IncorrectPassword(Exception):
+    def __init__(self):
+        super().__init__()
+
+class SessionExpired(Exception):
+    def __init__(self):
+        super().__init__()
+
+class SessionDontExists(Exception):
+    def __init__(self):
+        super().__init__()from .router import browser_routerfrom .browser_endpoint_handler import BrowserEndpointHandlerfrom fastapi import HTTPException
 from markdown_it.common.entities import entities
 
 from exceptions import APIEntityDoesNotExists, EntityDoesNotExists
@@ -811,7 +864,8 @@ class BrowserSearchEntitiesQuery(BaseModel):
 from .storage_acting import storage_acting_router
 from .upload import upload_router
 from .authorization import auth_router
-from .download import download_routerfrom .router import download_routerfrom fastapi import APIRouter, BackgroundTasks, Query, Depends
+from .download import download_router
+from .settings import settings_routerfrom .router import download_routerfrom fastapi import APIRouter, BackgroundTasks, Query, Depends
 
 from .schemas.query import DownloadQuery
 from .endpoint_handlers import FileResponseHandler
@@ -962,14 +1016,14 @@ class DeleteEntityHandler:
         except Exception as e:
             self.logger.log(e)from .router import auth_routerfrom fastapi import APIRouter, Request, Response, Query
 from .endpoint_handlers import SignUpHandler, LogOutHandler, AuthHandler
-from app.singletones import session_deleter, logger, user_reader, storage_writer, user_registrator, user_authenticator
+from app.singletones import user_logouter, logger, user_reader, storage_writer, user_registrator, user_authenticator
 from .schemas.query import AuthenticateQuery, SignUpQuery
 
 
 auth_router = APIRouter()
 
 
-logout_handler = LogOutHandler(session_deleter, logger)
+logout_handler = LogOutHandler(user_logouter, logger)
 sign_up_handler = SignUpHandler(user_registrator, storage_writer, user_reader)
 auth_handler = AuthHandler(user_authenticator)
 
@@ -985,8 +1039,8 @@ def sign_up_endpoint(params: SignUpQuery = Query()):
     return {"message": 'successfully signed up'}
 
 @auth_router.post('/_log-in', name='auth-login')
-def authenticate(response: Response, params: AuthenticateQuery = Query()):
-    auth_handler.auth_with_psw_and_set_session_cookie(params.name, params.password, response)
+def authenticate(response: Response, request: Request, params: AuthenticateQuery = Query()):
+    auth_handler.auth_with_psw_and_set_session_cookie(params.name, params.password, response, request)
     return {"message": 'successfully logged_in'}
 
 
@@ -1015,10 +1069,11 @@ class SignUpQuery(BaseModel):
 class AuthenticateQuery(BaseModel):
     name: str
     password: str
-from fastapi import Response
+from fastapi import Response, Request
 
-from exceptions import APIIncorrectPassword, APIUserDontExists, IncorrectPassword, UserDontExists, Unauthorized, \
-    APISessionDontExists, APISessionExpired, SessionExpired, SessionDontExists, APIUnauthorized
+from exceptions import APIIncorrectPassword, APIUserDontExists, \
+    APISessionDontExists, APISessionExpired, APIUnauthorized
+from auth.exceptions import SessionExpired, SessionDontExists, IncorrectPassword, UserDontExists
 from config import SESSION_COOKIES_EXPIRE_TIME
 
 class AuthHandler:
@@ -1032,8 +1087,10 @@ class AuthHandler:
     def check_password(self, password, user):
         self.authenticator.validate_user_and_password('', user, password)
 
-    def auth_with_psw_and_set_session_cookie(self, name, password, response: Response):
+    def auth_with_psw_and_set_session_cookie(self, name, password, response: Response, request: Request):
         try:
+            if request.cookies.get('session_id'):
+                return
             session_id = self.authenticator.make_session_by_name_and_psw(name, password)
             self.set_session_id_cookie(session_id, response)
         except IncorrectPassword:
@@ -1058,23 +1115,23 @@ from .auth_handler import AuthHandler
 from .logout_handler import LogOutHandler
 from .sign_up_handler import SignUpHandlerfrom fastapi import Request, Response
 
+from exceptions.database_repo import FieldUniqueViolation
+
 
 class LogOutHandler:
-    def __init__(self, session_deleter, logger):
-        self.session_deleter = session_deleter
+    def __init__(self, user_logouter, logger):
+        self.logouter = user_logouter
         self.logger = logger
 
     def logout_user(self, request: Request, response: Response):
         try:
-            session_id = request.cookies.get('session_id')
-            if session_id is None:
-                return
-            response.delete_cookie('session_id')
-            self.session_deleter.delete_session(session_id)
+            self.logouter.logout_user(request, response)
+        except FieldUniqueViolation:
+            return
         except Exception as e:
             self.logger.log(e)
-            raise e
-from exceptions import APIUserAlreadyExists, UserAlreadyExists, APIUserStorageAlreadyExists
+from exceptions import APIUserAlreadyExists, APIUserStorageAlreadyExists
+from auth.exceptions import UserAlreadyExists
 from interfaces import IStorageWriter
 
 class SignUpHandler:
@@ -1161,41 +1218,58 @@ class UploadFileHandler:
         self.path_ensurer.ensure_path_safety(user_id, path_in_storage)
         await self._iterate_and_save_files_to_storage(files, path_in_storage, str(user_id))
 
-
-class AccountDeleter: pass
-
-
-
-class SettingsHandler:
-    def __init__(self, acc_deleter): pass
-    #ушёл спатьfrom fastapi import APIRouter, Depends, Query
+from .router import settings_routerfrom fastapi import APIRouter, Depends, Query, Request, Response
 
 from ..dependencies import auth_depend
 from .schemas.query import AccountDeleteQuery
+from app.singletones import user_deleter, logger, user_logouter
+
+from .endpoint_handlers import SettingsHandler
 
 settings_router = APIRouter()
 
+settings_handler = SettingsHandler(user_deleter, logger, user_logouter)
+
+#TODO need to delete or safe-delete user's storage
+
 
 @settings_router.delete('/settings/delete_acc')
-def delete_account(user=Depends(auth_depend.auth), params: AccountDeleteQuery = Query()):
+def delete_user(request: Request,
+                response: Response,
+                user=Depends(auth_depend.auth),
+                params: AccountDeleteQuery = Query()):
+
     auth_depend.ask_for_password(password=params.password, user=user)
-    #TODO ушёл спать. НАДО доделать
-    return {"message": 'not implemented'}
+    settings_handler.delete_account(user.id, request, response)
+    return {"message": 'successfully deleted account'}
 from pydantic import BaseModel
 
 
 class AccountDeleteQuery(BaseModel):
-    name: str
-    password: strfrom app.routes.authorization.router import auth_handler
+    password: strfrom .settings_handler import SettingsHandler
+class SettingsHandler:
+    def __init__(self, acc_deleter, logger, user_logouter):
+        self.account_deleter = acc_deleter
+        self.logger = logger
+        self.logouter = user_logouter
+
+
+    def delete_account(self, user_id, request, response):
+        try:
+            self.logouter.logout_user(request=request, response=response)
+            self.account_deleter.delete_user_by_id(user_id)
+        except Exception as e:
+            self.logger.log(e)from app.routes.authorization.router import auth_handler
 from depends import AuthDepend
 
 auth_depend = AuthDepend(auth_handler)
 from redis import Redis
 
+from auth.user_deleter import UserDeleter
 from utils import Logger, TimeHandler, PathCutter, PathJoiner, PathValidEnsurer, Hasher
 from logic import StorageReader, StorageWriter, Archivator
 from db_repository import ModelReader, ModelActor
-from auth import UserRegistration, UserAuthentication ,SessionValidator, SessionMaker, SessionDeleter, UserGetter
+from auth import UserRegistration, UserLogout, UserAuthentication ,SessionValidator, SessionMaker, SessionDeleter, UserGetter
 from cache_handler import RedisCacher
 from alchemy import User, Session
 
@@ -1216,17 +1290,18 @@ user_reader = ModelReader(User, logger)
 user_actor = ModelActor(User, logger)
 session_reader = ModelReader(Session, logger)
 session_actor = ModelActor(Session, logger)
-session_deleter = SessionDeleter(redis_cacher, session_actor)
+session_deleter = SessionDeleter(redis_cacher, session_actor, session_reader)
 session_validator = SessionValidator(time_handler, session_deleter)
 session_maker = SessionMaker(int(SESSION_EXPIRE_TIME), session_actor, time_handler, hasher, redis_cacher)
 user_getter = UserGetter(user_reader, session_reader, redis_cacher, session_validator)
 user_registrator = UserRegistration(user_actor, hasher, logger)
 user_authenticator = UserAuthentication(user_reader, session_maker, user_getter, logger, hasher)
-session_deleter = SessionDeleter(redis_cacher, session_actor)from fastapi import FastAPI
+user_logouter = UserLogout(session_deleter)
+user_deleter = UserDeleter(user_actor)from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
-from .routes import download_router, auth_router, upload_router ,storage_acting_router ,browser_router
+from .routes import download_router, settings_router, auth_router, upload_router ,storage_acting_router ,browser_router
 
 browser_static_dir = Path(__file__).parent / 'routes/browser/static'
 global_static_dir = Path(__file__).parent / 'static'
@@ -1244,7 +1319,8 @@ app.include_router(browser_router)
 app.include_router(storage_acting_router)
 app.include_router(download_router)
 app.include_router(upload_router)
-app.include_router(auth_router)from datetime import datetime
+app.include_router(auth_router)
+app.include_router(settings_router)from datetime import datetime
 
 
 print(datetime.astimezone())from werkzeug.security import generate_password_hash, check_password_hash
@@ -1490,7 +1566,7 @@ class Session(Base):
     __tablename__ = "sessions"
 
     id = Column(String(50), primary_key=True)
-    user_id = Column(Integer, ForeignKey(User.id))
+    user_id = Column(Integer, ForeignKey(User.id), unique=True)
     expire_date = Column(Date)
 
 Base.metadata.create_all(bind=engine)

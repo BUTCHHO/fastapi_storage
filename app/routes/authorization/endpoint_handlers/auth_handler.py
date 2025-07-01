@@ -1,7 +1,8 @@
-from fastapi import Response
+from fastapi import Response, Request
 
-from exceptions import APIIncorrectPassword, APIUserDontExists, IncorrectPassword, UserDontExists, Unauthorized, \
-    APISessionDontExists, APISessionExpired, SessionExpired, SessionDontExists, APIUnauthorized
+from exceptions import APIIncorrectPassword, APIUserDontExists, \
+    APISessionDontExists, APISessionExpired, APIUnauthorized
+from auth.exceptions import SessionExpired, SessionDontExists, IncorrectPassword, UserDontExists
 from config import SESSION_COOKIES_EXPIRE_TIME
 
 class AuthHandler:
@@ -15,8 +16,10 @@ class AuthHandler:
     def check_password(self, password, user):
         self.authenticator.validate_user_and_password('', user, password)
 
-    def auth_with_psw_and_set_session_cookie(self, name, password, response: Response):
+    def auth_with_psw_and_set_session_cookie(self, name, password, response: Response, request: Request):
         try:
+            if request.cookies.get('session_id'):
+                return
             session_id = self.authenticator.make_session_by_name_and_psw(name, password)
             self.set_session_id_cookie(session_id, response)
         except IncorrectPassword:

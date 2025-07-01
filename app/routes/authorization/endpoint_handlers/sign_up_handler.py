@@ -1,4 +1,5 @@
-from exceptions import APIUserAlreadyExists, UserAlreadyExists, APIUserStorageAlreadyExists
+from exceptions import APIUserAlreadyExists, APIUserStorageAlreadyExists
+from auth.exceptions import UserAlreadyExists
 from interfaces import IStorageWriter
 
 class SignUpHandler:
