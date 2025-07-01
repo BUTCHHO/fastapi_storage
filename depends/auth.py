@@ -27,4 +27,4 @@ class AuthDepend:
         except IncorrectPassword:
             raise APIIncorrectPassword
         except UserDontExists:
-            raise UserDontExists('')
+            raise APIUserDontExists('')
