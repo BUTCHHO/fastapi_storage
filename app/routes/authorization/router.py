@@ -12,21 +12,33 @@ sign_up_handler = SignUpHandler(user_registrator, storage_writer, user_reader)
 auth_handler = AuthHandler(user_authenticator)
 
 
-@auth_router.post('/log-out')
+@auth_router.get('/_logout', name='auth-logout')
 def log_out_endpoint(request: Request, response: Response):
     logout_handler.logout_user(request, response)
 
 
-@auth_router.post('/sign-up')
+@auth_router.post('/_sign-up', name='auth-sign_up')
 def sign_up_endpoint(params: SignUpQuery = Query()):
     sign_up_handler.sign_up(params)
     return {"message": 'successfully signed up'}
 
-@auth_router.post('/log-in')
+@auth_router.post('/_log-in', name='auth-login')
 def authenticate(response: Response, params: AuthenticateQuery = Query()):
     auth_handler.auth_with_psw_and_set_session_cookie(params.name, params.password, response)
     return {"message": 'successfully logged_in'}
 
+
+@auth_router.get('/profile', name='view-profile')
+def view_profile():
+    return {"message": 'not implemented'}
+
+@auth_router.get('/log-in', name='view-login')
+def view_login():
+    return {"message": 'not implemented'}
+
+@auth_router.get('/sign-up', name='view-sign_up')
+def view_sign_up():
+    return {"message": 'not implemented'}
 
 
 

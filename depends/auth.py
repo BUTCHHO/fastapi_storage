@@ -1,4 +1,6 @@
 from fastapi import Request
+
+from exceptions import APIUserDontExists
 from exceptions.auth_http_exc import APIIncorrectPassword
 from exceptions.auth import IncorrectPassword, UserDontExists, Unauthorized
 from exceptions.auth_http_exc import APIUnauthorized
@@ -6,6 +8,14 @@ from exceptions.auth_http_exc import APIUnauthorized
 class AuthDepend:
     def __init__(self, auth_handler):
         self.auth_handler = auth_handler
+
+    def auth_allow_unauthorized(self, request: Request):
+        try:
+            return self.auth(request)
+        except APIUserDontExists:
+            return None
+        except APIUnauthorized:
+            return None
 
     def auth(self, request: Request):
         session_id = request.cookies.get('session_id')

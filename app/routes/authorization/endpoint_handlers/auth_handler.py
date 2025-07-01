@@ -29,11 +29,11 @@ class AuthHandler:
             if session_id is None:
                 raise APIUnauthorized
             return self.authenticator.auth_by_session_id(session_id)
-        except UserDontExists:
-            raise APIUserDontExists
         except SessionExpired:
             raise APISessionExpired
         except SessionDontExists:
             raise APISessionDontExists
+        except UserDontExists:
+            raise APIUserDontExists
 
 

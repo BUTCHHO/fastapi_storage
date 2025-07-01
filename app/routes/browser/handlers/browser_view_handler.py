@@ -6,5 +6,5 @@ class BrowserViewHandler:
 
 
     def get_html_response(self, request, user):
-        context = {}
+        context = {'request': request, "user": user}
         return self.templates.TemplateResponse(request, 'browser.html', context)
