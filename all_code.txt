@@ -289,7 +289,7 @@ class AuthDepend:
         except IncorrectPassword:
             raise APIIncorrectPassword
         except UserDontExists:
-            raise UserDontExists('')
+            raise APIUserDontExists('')
 from dotenv import load_dotenv
 from os import getenv
 
@@ -1161,7 +1161,32 @@ class UploadFileHandler:
         self.path_ensurer.ensure_path_safety(user_id, path_in_storage)
         await self._iterate_and_save_files_to_storage(files, path_in_storage, str(user_id))
 
-from app.routes.authorization.router import auth_handler
+
+class AccountDeleter: pass
+
+
+
+class SettingsHandler:
+    def __init__(self, acc_deleter): pass
+    #ушёл спатьfrom fastapi import APIRouter, Depends, Query
+
+from ..dependencies import auth_depend
+from .schemas.query import AccountDeleteQuery
+
+settings_router = APIRouter()
+
+
+@settings_router.delete('/settings/delete_acc')
+def delete_account(user=Depends(auth_depend.auth), params: AccountDeleteQuery = Query()):
+    auth_depend.ask_for_password(password=params.password, user=user)
+    #TODO ушёл спать. НАДО доделать
+    return {"message": 'not implemented'}
+from pydantic import BaseModel
+
+
+class AccountDeleteQuery(BaseModel):
+    name: str
+    password: strfrom app.routes.authorization.router import auth_handler
 from depends import AuthDepend
 
 auth_depend = AuthDepend(auth_handler)
