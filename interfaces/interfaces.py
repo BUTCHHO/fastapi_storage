@@ -12,6 +12,8 @@ class IStorageReader(ABC):
     def join_with_root_path(self, path:str) -> str: pass
     @abstractmethod
     def get_all_entitynames_in_dir(self, path: str) -> list[str]: pass
+    @abstractmethod
+    def find_entities_path(self, searching_in: str | None, pattern: str) -> list[str]: pass
 
 class IStorageWriter(ABC):
     @abstractmethod

@@ -261,6 +261,8 @@ def test_ensurer_goes_beyond_limits():
     is_safe = not ensurer.is_goes_beyond_limits(safe_path)
     assert is_unsafe == is_unsafe_rel == is_safe == True
 from .auth import AuthDependfrom fastapi import Request
+
+from exceptions import APIUserDontExists
 from exceptions.auth_http_exc import APIIncorrectPassword
 from exceptions.auth import IncorrectPassword, UserDontExists, Unauthorized
 from exceptions.auth_http_exc import APIUnauthorized
@@ -268,6 +270,14 @@ from exceptions.auth_http_exc import APIUnauthorized
 class AuthDepend:
     def __init__(self, auth_handler):
         self.auth_handler = auth_handler
+
+    def auth_allow_unauthorized(self, request: Request):
+        try:
+            return self.auth(request)
+        except APIUserDontExists:
+            return None
+        except APIUnauthorized:
+            return None
 
     def auth(self, request: Request):
         session_id = request.cookies.get('session_id')
@@ -572,8 +582,6 @@ class UserGetter:
             return self._get_user_if_session_not_in_cache(session_id)
         user_id = int(user_id)
         user = self._get_user_from_db(user_id)
-        if user is None:
-            raise UserDontExists
         return user
 from interfaces import ITimeHandler
 from exceptions import SessionExpired
@@ -727,10 +735,11 @@ class BrowserViewHandler:
 
 
     def get_html_response(self, request, user):
-        context = {}
+        context = {'request': request, "user": user}
         return self.templates.TemplateResponse(request, 'browser.html', context)from fastapi import APIRouter, Depends, Query, Request
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
+from fastapi.responses import HTMLResponse
 
 from app.singletones import storage_reader, logger, path_joiner, path_cutter, path_ensurer
 from .handlers.browser_view_handler import BrowserViewHandler
@@ -754,16 +763,16 @@ templates = Jinja2Templates(directory=[templates_dir, global_templates_dir])
 browser_endpoint_handler = BrowserEndpointHandler(storage_reader, logger, path_joiner, path_cutter, path_ensurer)
 browser_view_handler = BrowserViewHandler(templates)
 
-@browser_router.get('/storage', response_model=ViewStorageResponse)
+@browser_router.get('/_get_entities', response_model=ViewStorageResponse)
 def get_entities_in_storage(params: ViewStorageQuery = Query(),
                          user=Depends(auth_depend.auth)):
     entities = browser_endpoint_handler.get_list_of_entities(user.id, params.path_in_storage)
     return {"entities": entities}
 
-@browser_router.get('/browser')
-def view_storage(request: Request, user=Depends(auth_depend.auth)):
-    # html_template_response = browser_view_handler.get_html_response(request=request, user=user)
-    return {"message": 'not implemented'}
+@browser_router.get('/browser', response_class=HTMLResponse)
+def view_storage(request: Request, user=Depends(auth_depend.auth_allow_unauthorized)):
+    html_template_response = browser_view_handler.get_html_response(request=request, user=user)
+    return html_template_response
 from pydantic import BaseModel
 
 
@@ -939,21 +948,33 @@ sign_up_handler = SignUpHandler(user_registrator, storage_writer, user_reader)
 auth_handler = AuthHandler(user_authenticator)
 
 
-@auth_router.post('/log-out')
+@auth_router.get('/_logout', name='auth-logout')
 def log_out_endpoint(request: Request, response: Response):
     logout_handler.logout_user(request, response)
 
 
-@auth_router.post('/sign-up')
+@auth_router.post('/_sign-up', name='auth-sign_up')
 def sign_up_endpoint(params: SignUpQuery = Query()):
     sign_up_handler.sign_up(params)
     return {"message": 'successfully signed up'}
 
-@auth_router.post('/log-in')
+@auth_router.post('/_log-in', name='auth-login')
 def authenticate(response: Response, params: AuthenticateQuery = Query()):
     auth_handler.auth_with_psw_and_set_session_cookie(params.name, params.password, response)
     return {"message": 'successfully logged_in'}
 
+
+@auth_router.get('/profile', name='view-profile')
+def view_profile():
+    return {"message": 'not implemented'}
+
+@auth_router.get('/log-in', name='view-login')
+def view_login():
+    return {"message": 'not implemented'}
+
+@auth_router.get('/sign-up', name='view-sign_up')
+def view_sign_up():
+    return {"message": 'not implemented'}
 
 
 
@@ -998,12 +1019,12 @@ class AuthHandler:
             if session_id is None:
                 raise APIUnauthorized
             return self.authenticator.auth_by_session_id(session_id)
-        except UserDontExists:
-            raise APIUserDontExists
         except SessionExpired:
             raise APISessionExpired
         except SessionDontExists:
             raise APISessionDontExists
+        except UserDontExists:
+            raise APIUserDontExists
 
 
 from .auth_handler import AuthHandler
@@ -1061,7 +1082,6 @@ upload_handler = UploadFileHandler(storage_writer, path_ensurer, logger, path_jo
 
 @upload_router.post('/upload-entity')
 async def upload_entity_endpoint(files: list[UploadFile], params: UploadQuery = Query(), user=Depends(auth_depend.auth)):
-
     await upload_handler.save_files_to_storage(str(user.id), params.path_in_storage, files)
     return {"message": 'successfully uploaded files'}
 from pydantic import BaseModel

@@ -1,4 +1,5 @@
 from fastapi import HTTPException
+from markdown_it.common.entities import entities
 
 from exceptions import APIEntityDoesNotExists, EntityDoesNotExists
 from interfaces import ILogger, IStorageReader, IPathCutter
@@ -34,9 +35,21 @@ class BrowserEndpointHandler:
             return entitynames
         except EntityDoesNotExists:
             raise APIEntityDoesNotExists(path_in_storage)
+        except Exception as e:
+            self.logger.log(e)
 
-        except HTTPException as e:
-            raise e
+    def _recursively_get_entities_by_pattern(self, pattern:str, searching_in):
+        entities = self.storage_reader.find_entities_path(searching_in, pattern)
+        return entities
 
+    def search_entities_by_pattern(self, user_id: str, pattern: str, searching_in: str):
+        try:
+            pattern = f'{pattern}*'
+            if searching_in is None:
+                searching_in = ''
+            self.path_ensurer.ensure_path_safety(user_id, searching_in)
+            searching_in_path_with_id = self.path_joiner.join_paths(user_id, searching_in)
+            entities = self._recursively_get_entities_by_pattern(pattern, searching_in_path_with_id)
+            return self._cut_user_id_from_entitynames(entities)
         except Exception as e:
             self.logger.log(e)

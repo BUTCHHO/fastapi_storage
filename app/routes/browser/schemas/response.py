@@ -1,5 +1,8 @@
 from pydantic import BaseModel
 
 
-class ViewStorageResponse(BaseModel):
-    entities: list
+class GetEntitiesResponse(BaseModel):
+    entities: list[str] | list
+
+class SearchEntitiesResponse(BaseModel):
+    entities: list[str] | list
