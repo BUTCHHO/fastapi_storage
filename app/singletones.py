@@ -2,7 +2,7 @@ from redis import Redis
 
 from auth.user_deleter import UserDeleter
 from utils import Logger, TimeHandler, PathCutter, PathJoiner, PathValidEnsurer, Hasher
-from logic import StorageReader, StorageWriter, Archivator
+from logic import StorageReader, StorageWriter, Archivator, StorageDeleter
 from db_repository import ModelReader, ModelActor
 from auth import UserRegistration, UserLogout, UserAuthentication ,SessionValidator, SessionMaker, SessionDeleter, UserGetter
 from cache_handler import RedisCacher
@@ -19,6 +19,7 @@ archivator = Archivator()
 time_handler = TimeHandler()
 storage_reader = StorageReader(STORAGE_PATH, path_joiner, path_cutter)
 storage_writer = StorageWriter(STORAGE_PATH)
+storage_deleter = StorageDeleter(storage_writer)
 hasher = Hasher()
 redis_cacher = RedisCacher(redis_client, CACHE_EXPIRE_TIME)
 user_reader = ModelReader(User, logger)

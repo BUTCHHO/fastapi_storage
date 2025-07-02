@@ -2,13 +2,13 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 
 from ..dependencies import auth_depend
 from .schemas.query import AccountDeleteQuery
-from app.singletones import user_deleter, logger, user_logouter
+from app.singletones import user_deleter, logger, user_logouter, storage_deleter
 
 from .endpoint_handlers import SettingsHandler
 
 settings_router = APIRouter()
 
-settings_handler = SettingsHandler(user_deleter, logger, user_logouter)
+settings_handler = SettingsHandler(user_deleter, logger, user_logouter, storage_deleter)
 
 #TODO need to delete or safe-delete user's storage
 
@@ -20,5 +20,6 @@ def delete_user(request: Request,
                 params: AccountDeleteQuery = Query()):
 
     auth_depend.ask_for_password(password=params.password, user=user)
-    settings_handler.delete_account(user.id, request, response)
+    settings_handler.delete_account(str(user.id), params.should_delete_storage, request, response)
     return {"message": 'successfully deleted account'}
+

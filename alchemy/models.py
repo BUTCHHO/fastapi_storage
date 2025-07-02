@@ -18,6 +18,7 @@ class User(Base):
     name = Column(String(30), unique=True)
     is_admin = Column(Boolean, default=False)
 
+
 class Session(Base):
     __tablename__ = "sessions"
 
