@@ -691,7 +691,8 @@ class UserRegistration:
     def create_user(self, name, password):
         try:
             password = self.hasher.generate_psw_hash(password)
-            self._user_actor.create_and_write_record_to_db(name=name, password=password)
+            storage_id = self.hasher.generate_hash(16)
+            self._user_actor.create_and_write_record_to_db(name=name, password=password, storage_id=storage_id)
         except FieldUniqueViolation:
                 raise UserAlreadyExists(name)
         except Exception as e:
@@ -741,9 +742,9 @@ class SessionExpired(Exception):
 class SessionDontExists(Exception):
     def __init__(self):
         super().__init__()from .router import browser_routerfrom .browser_endpoint_handler import BrowserEndpointHandlerfrom fastapi import HTTPException
-from markdown_it.common.entities import entities
+from path_explorator import PathGoesBeyondLimits
 
-from exceptions import APIEntityDoesNotExists, EntityDoesNotExists
+from exceptions import APIEntityDoesNotExists, EntityDoesNotExists, APIPathGoesBeyondLimits
 from interfaces import ILogger, IStorageReader, IPathCutter
 
 
@@ -755,24 +756,20 @@ class BrowserEndpointHandler:
         self.path_joiner = path_joiner
         self.path_cutter: IPathCutter = path_cutter
 
-    def _get_abs_path(self, user_id, path_to_dir):
-        path_with_user_id = self.path_joiner.join_paths(user_id, path_to_dir)
-        return self.storage_reader.join_with_root_path(path_with_user_id)
-
-    def _cut_user_id_from_entitynames(self, entities: list[str]):
-        cut_entities = [self.path_cutter.remove_id_from_rel_path(entity) for entity in entities]
-        return cut_entities
+    def _get_abs_path(self, storage_path, path_to_dir):
+        path_with_storage_id = self.path_joiner.join_paths(storage_path, path_to_dir)
+        return self.storage_reader.join_with_root_path(path_with_storage_id)
 
     def _get_all_entitynames_in_dir(self, rel_dir_path):
-        entitynames = self.storage_reader.get_all_entitynames_in_dir(rel_dir_path)
-        return self._cut_user_id_from_entitynames(entitynames)
+         return self.storage_reader.get_all_entitynames_in_dir(rel_dir_path)
 
-    def get_list_of_entities(self, user_id, path_in_storage: str | None):
+
+    def get_list_of_entities(self, storage_id, path_in_storage: str | None):
         try:
             if path_in_storage is None:
                 path_in_storage = ''
-            self.path_ensurer.ensure_path_safety(user_id, path_in_storage)
-            path_in_storage_with_id = self.path_joiner.join_paths(str(user_id), path_in_storage)
+            self.path_ensurer.ensure_path_safety(storage_id, path_in_storage)
+            path_in_storage_with_id = self.path_joiner.join_paths(storage_id, path_in_storage)
             entitynames = self._get_all_entitynames_in_dir(path_in_storage_with_id)
             return entitynames
         except EntityDoesNotExists:
@@ -784,16 +781,17 @@ class BrowserEndpointHandler:
         entities = self.storage_reader.find_entities_path(searching_in, pattern)
         return entities
 
-    def search_entities_by_pattern(self, user_id: str, pattern: str, searching_in: str):
+    def search_entities_by_pattern(self, storage_id: str, pattern: str, searching_in: str):
         try:
             pattern = f'{pattern}*'
             if searching_in is None:
                 searching_in = ''
-            self.path_ensurer.ensure_path_safety(user_id, searching_in)
-            searching_in_path_with_id = self.path_joiner.join_paths(user_id, searching_in)
+            self.path_ensurer.ensure_path_safety(storage_id, searching_in)
+            searching_in_path_with_id = self.path_joiner.join_paths(storage_id, searching_in)
             entities = self._recursively_get_entities_by_pattern(pattern, searching_in_path_with_id)
-            return self._cut_user_id_from_entitynames(entities)
+            return entities
         except Exception as e:
+            if isinstance(e, HTTPException): raise
             self.logger.log(e)from fastapi.templating import Jinja2Templates
 
 class BrowserViewHandler:
@@ -833,12 +831,13 @@ browser_view_handler = BrowserViewHandler(templates)
 @browser_router.get('/_get_entities', response_model=GetEntitiesResponse)
 def get_entities_in_storage(params: BrowserGetEntitiesQuery = Query(),
                             user=Depends(auth_depend.auth)):
-    entities = browser_endpoint_handler.get_list_of_entities(user.id, params.path_in_storage)
-    return {"entities": entities}
+    entities = browser_endpoint_handler.get_list_of_entities(user.storage_id, params.path_in_storage)
+    return {"entities": entities,
+            "path_in_storage": params.path_in_storage}
 
 @browser_router.get('/_get_entities/search', response_model=SearchEntitiesResponse)
 def search_entities_by_pattern(user=Depends(auth_depend.auth), params: BrowserSearchEntitiesQuery = Query()):
-    entities = browser_endpoint_handler.search_entities_by_pattern(str(user.id), params.pattern, params.searching_in_path)
+    entities = browser_endpoint_handler.search_entities_by_pattern(user.storage_id, params.pattern, params.searching_in_path)
     return {"entities": entities}
 
 @browser_router.get('/browser', response_class=HTMLResponse)
@@ -849,6 +848,7 @@ from pydantic import BaseModel
 
 
 class GetEntitiesResponse(BaseModel):
+    path_in_storage: str | None
     entities: list[str] | list
 
 class SearchEntitiesResponse(BaseModel):
@@ -880,7 +880,7 @@ file_response_handler = FileResponseHandler(archivator, storage_reader, logger, 
 
 @download_router.get('/download-entity')
 def download_entity_endpoint(background_tasks: BackgroundTasks, params: DownloadQuery = Query(), user=Depends(auth_depend.auth)):
-    response = file_response_handler.get_response(user.id, params.entity_path_in_storage)
+    response = file_response_handler.get_response(user.storage_id, params.entity_path_in_storage)
     background_tasks.add_task(archivator.cleanup_temp_files)
     return responsefrom pydantic import BaseModel
 
@@ -929,9 +929,9 @@ class FileResponseHandler:
         return self._make_response(absolute_path_file)
 
 
-    def get_response(self, user_id, entity_path_in_storage):
-        entity_path_in_storage = self.path_joiner.join_paths(str(user_id), entity_path_in_storage)
-        self.ensurer.ensure_path_safety(str(user_id), entity_path_in_storage)
+    def get_response(self, storage_id, entity_path_in_storage):
+        entity_path_in_storage = self.path_joiner.join_paths(storage_id, entity_path_in_storage)
+        self.ensurer.ensure_path_safety(storage_id, entity_path_in_storage)
         if not self.ensurer.is_exists(entity_path_in_storage):
             raise APIEntityDoesNotExists(entity_path_in_storage)
         if self.storage_reader.is_dir(entity_path_in_storage):
@@ -957,7 +957,7 @@ delete_entity_handler = DeleteEntityHandler(path_ensurer, storage_writer, path_j
 
 @storage_acting_router.post('/make-dir-in-storage')
 def make_dir_in_storage(user=Depends(auth_depend.auth), params: MakeDirInStorageQuery = Query()):
-    make_dir_handler.make_dir_in_storage(user.id, params.path_in_storage, params.name)
+    make_dir_handler.make_dir_in_storage(user.storage_id, params.path_in_storage, params.name)
 
 @storage_acting_router.delete('/delete-entity-in-storage')
 def delete_entity(user=Depends(auth_depend.auth), params: DeleteEntityQuery = Query()):
@@ -984,13 +984,13 @@ class MakeDirHandler:
         self.path_joiner = path_joiner
         self.path_ensurer = path_ensurer
 
-    def make_dir_in_storage(self,user_id, path, name):
+    def make_dir_in_storage(self,storage_id, path, name):
         if path is None:
             path = ''
         try:
-            self.path_ensurer.ensure_path_safety(user_id, path)
-            path_with_user_id = self.path_joiner.join_paths(str(user_id), path)
-            self.storage_writer.create_dir(path_with_user_id, name)
+            self.path_ensurer.ensure_path_safety(storage_id, path)
+            path_with_storage_id = self.path_joiner.join_paths(storage_id, path)
+            self.storage_writer.create_dir(path_with_storage_id, name)
         except FileExistsError:
             raise APIDirectoryAlreadyExistsfrom .make_dir_handler import MakeDirHandler
 from .delete_dir_handler import DeleteEntityHandlerfrom interfaces import IStorageWriter
@@ -1145,13 +1145,13 @@ class SignUpHandler:
         try:
             self.user_registrator.create_user(params.name, params.password)
             user = self.user_reader.get_by_kwargs(name = params.name)
-            self.create_user_dir(user.id)
+            self.create_user_storage(user.storage_id)
         except UserAlreadyExists:
             raise APIUserAlreadyExists(params.name)
 
-    def create_user_dir(self, user_id):
+    def create_user_storage(self, storage_id):
         try:
-            self.storage_writer.create_dir('', str(user_id), exist_ok=False)
+            self.storage_writer.create_dir('', storage_id, exist_ok=False)
         except FileExistsError:
             raise APIUserStorageAlreadyExistsfrom .router import upload_routerfrom fastapi import APIRouter, UploadFile, Query, Depends
 from .schemas.query import UploadQuery
@@ -1166,7 +1166,7 @@ upload_handler = UploadFileHandler(storage_writer, path_ensurer, logger, path_jo
 
 @upload_router.post('/upload-entity')
 async def upload_entity_endpoint(files: list[UploadFile], params: UploadQuery = Query(), user=Depends(auth_depend.auth)):
-    await upload_handler.save_files_to_storage(str(user.id), params.path_in_storage, files)
+    await upload_handler.save_files_to_storage(user.storage_id, params.path_in_storage, files)
     return {"message": 'successfully uploaded files'}
 from pydantic import BaseModel
 
@@ -1210,13 +1210,13 @@ class UploadFileHandler:
             self.logger.log(e)
             raise e
 
-    async def save_files_to_storage(self, user_id, path_in_storage, files: list):
+    async def save_files_to_storage(self, storage_id, path_in_storage, files: list):
         if len(files) > self.max_upload_files:
             raise APITooManyFiles
         if path_in_storage is None:
             path_in_storage = ''
-        self.path_ensurer.ensure_path_safety(user_id, path_in_storage)
-        await self._iterate_and_save_files_to_storage(files, path_in_storage, str(user_id))
+        self.path_ensurer.ensure_path_safety(storage_id, path_in_storage)
+        await self._iterate_and_save_files_to_storage(files, path_in_storage, storage_id)
 
 from .router import settings_routerfrom fastapi import APIRouter, Depends, Query, Request, Response
 
@@ -1347,7 +1347,9 @@ class Hasher:
 
     def create_session_id_hash(self):
         return token_urlsafe(32)
-from .path_validator import PathValidEnsurer
+
+    def generate_hash(self, nbytes):
+        return token_urlsafe(nbytes)from .path_validator import PathValidEnsurer
 from .path_creator import PathJoiner
 from .logger import Logger
 from .text_encoding import get_encoded_string
@@ -1534,8 +1536,8 @@ class PathValidEnsurer:
         return entity.is_dir()
 
 
-    def raise_if_goes_beyond_limits(self, abs_path: str, user_id, requesting_path:str):
-        user_directory = self.path_creator.create_absolute_user_dir_path(user_id)
+    def raise_if_goes_beyond_limits(self, abs_path: str, storage_id, requesting_path:str):
+        user_directory = self.path_creator.create_absolute_user_dir_path(storage_id)
         if self.is_goes_beyond_limits(abs_path):
             raise PathGoesBeyondLimits(requesting_path)
         if not self.is_path_rel_to_another_path(abs_path, user_directory):
@@ -1545,10 +1547,10 @@ class PathValidEnsurer:
         if not self.is_exists(path):
             raise EntityDoesNotExists(path)
 
-    def ensure_path_safety(self, user_id: int, path_in_storage: str):
+    def ensure_path_safety(self, storage_id: int, path_in_storage: str):
         try:
-            abs_path = self.path_creator.create_absolute_path(user_id, path_in_storage)
-            self.raise_if_goes_beyond_limits(abs_path, user_id, path_in_storage)
+            abs_path = self.path_creator.create_absolute_path(storage_id, path_in_storage)
+            self.raise_if_goes_beyond_limits(abs_path, storage_id, path_in_storage)
         except PathGoesBeyondLimits:
             raise APIPathGoesBeyondLimits(path_in_storage)
 
@@ -1572,7 +1574,7 @@ class User(Base):
     password = Column(String(255))
     name = Column(String(30), unique=True)
     is_admin = Column(Boolean, default=False)
-
+    storage_id = Column(String(32), unique = True)
 
 class Session(Base):
     __tablename__ = "sessions"
@@ -1640,12 +1642,11 @@ class StorageReader:
         if not isinstance(dirpath, str):
             raise TypeError(f'dirpath arg must be str, not {type(dirpath)}')
         path = Path(self.root_dir, dirpath)
-        print(path.__str__(), 'PATH')
         if not path.exists():
             raise EntityDoesNotExists(dirpath)
         if not path.is_dir():
             raise EntityIsNotADir(dirpath)
-        entities_names = [self._path_cutter.cut_path(str(entity), str(self.root_dir)) for entity in path.iterdir()]
+        entities_names = [self._path_cutter.cut_path(str(entity), str(path)) for entity in path.iterdir()]
         return entities_names
 
     def find_entities_path(self, searching_in: str | None, pattern: str) -> list[str]:
@@ -1662,7 +1663,7 @@ class StorageReader:
         if not isinstance(pattern, str):
             raise TypeError(f'pattern arg must be str, not {type(pattern)}')
         searchable_dir = Path(self.root_dir, searching_in)
-        paths = [self._path_cutter.cut_path(str(path), str(self.root_dir)) for path in searchable_dir.rglob(pattern)]
+        paths = [self._path_cutter.cut_path(str(path), str(searchable_dir)) for path in searchable_dir.rglob(pattern)]
         return paths
 
     def is_exists(self, path: str | None) -> bool:
