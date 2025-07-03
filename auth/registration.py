@@ -10,7 +10,8 @@ class UserRegistration:
     def create_user(self, name, password):
         try:
             password = self.hasher.generate_psw_hash(password)
-            self._user_actor.create_and_write_record_to_db(name=name, password=password)
+            storage_id = self.hasher.generate_hash(16)
+            self._user_actor.create_and_write_record_to_db(name=name, password=password, storage_id=storage_id)
         except FieldUniqueViolation:
                 raise UserAlreadyExists(name)
         except Exception as e:

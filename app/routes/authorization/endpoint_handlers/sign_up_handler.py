@@ -13,12 +13,12 @@ class SignUpHandler:
         try:
             self.user_registrator.create_user(params.name, params.password)
             user = self.user_reader.get_by_kwargs(name = params.name)
-            self.create_user_dir(user.id)
+            self.create_user_storage(user.storage_id)
         except UserAlreadyExists:
             raise APIUserAlreadyExists(params.name)
 
-    def create_user_dir(self, user_id):
+    def create_user_storage(self, storage_id):
         try:
-            self.storage_writer.create_dir('', str(user_id), exist_ok=False)
+            self.storage_writer.create_dir('', storage_id, exist_ok=False)
         except FileExistsError:
             raise APIUserStorageAlreadyExists

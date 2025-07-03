@@ -9,12 +9,12 @@ class MakeDirHandler:
         self.path_joiner = path_joiner
         self.path_ensurer = path_ensurer
 
-    def make_dir_in_storage(self,user_id, path, name):
+    def make_dir_in_storage(self,storage_id, path, name):
         if path is None:
             path = ''
         try:
-            self.path_ensurer.ensure_path_safety(user_id, path)
-            path_with_user_id = self.path_joiner.join_paths(str(user_id), path)
-            self.storage_writer.create_dir(path_with_user_id, name)
+            self.path_ensurer.ensure_path_safety(storage_id, path)
+            path_with_storage_id = self.path_joiner.join_paths(storage_id, path)
+            self.storage_writer.create_dir(path_with_storage_id, name)
         except FileExistsError:
             raise APIDirectoryAlreadyExists

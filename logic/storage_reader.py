@@ -55,12 +55,11 @@ class StorageReader:
         if not isinstance(dirpath, str):
             raise TypeError(f'dirpath arg must be str, not {type(dirpath)}')
         path = Path(self.root_dir, dirpath)
-        print(path.__str__(), 'PATH')
         if not path.exists():
             raise EntityDoesNotExists(dirpath)
         if not path.is_dir():
             raise EntityIsNotADir(dirpath)
-        entities_names = [self._path_cutter.cut_path(str(entity), str(self.root_dir)) for entity in path.iterdir()]
+        entities_names = [self._path_cutter.cut_path(str(entity), str(path)) for entity in path.iterdir()]
         return entities_names
 
     def find_entities_path(self, searching_in: str | None, pattern: str) -> list[str]:
@@ -77,7 +76,7 @@ class StorageReader:
         if not isinstance(pattern, str):
             raise TypeError(f'pattern arg must be str, not {type(pattern)}')
         searchable_dir = Path(self.root_dir, searching_in)
-        paths = [self._path_cutter.cut_path(str(path), str(self.root_dir)) for path in searchable_dir.rglob(pattern)]
+        paths = [self._path_cutter.cut_path(str(path), str(searchable_dir)) for path in searchable_dir.rglob(pattern)]
         return paths
 
     def is_exists(self, path: str | None) -> bool:

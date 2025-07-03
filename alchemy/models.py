@@ -17,7 +17,7 @@ class User(Base):
     password = Column(String(255))
     name = Column(String(30), unique=True)
     is_admin = Column(Boolean, default=False)
-
+    storage_id = Column(String(32), unique = True)
 
 class Session(Base):
     __tablename__ = "sessions"

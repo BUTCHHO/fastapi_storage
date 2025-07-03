@@ -30,11 +30,11 @@ class UploadFileHandler:
             self.logger.log(e)
             raise e
 
-    async def save_files_to_storage(self, user_id, path_in_storage, files: list):
+    async def save_files_to_storage(self, storage_id, path_in_storage, files: list):
         if len(files) > self.max_upload_files:
             raise APITooManyFiles
         if path_in_storage is None:
             path_in_storage = ''
-        self.path_ensurer.ensure_path_safety(user_id, path_in_storage)
-        await self._iterate_and_save_files_to_storage(files, path_in_storage, str(user_id))
+        self.path_ensurer.ensure_path_safety(storage_id, path_in_storage)
+        await self._iterate_and_save_files_to_storage(files, path_in_storage, storage_id)
 

@@ -79,8 +79,8 @@ class PathValidEnsurer:
         return entity.is_dir()
 
 
-    def raise_if_goes_beyond_limits(self, abs_path: str, user_id, requesting_path:str):
-        user_directory = self.path_creator.create_absolute_user_dir_path(user_id)
+    def raise_if_goes_beyond_limits(self, abs_path: str, storage_id, requesting_path:str):
+        user_directory = self.path_creator.create_absolute_user_dir_path(storage_id)
         if self.is_goes_beyond_limits(abs_path):
             raise PathGoesBeyondLimits(requesting_path)
         if not self.is_path_rel_to_another_path(abs_path, user_directory):
@@ -90,10 +90,10 @@ class PathValidEnsurer:
         if not self.is_exists(path):
             raise EntityDoesNotExists(path)
 
-    def ensure_path_safety(self, user_id: int, path_in_storage: str):
+    def ensure_path_safety(self, storage_id: int, path_in_storage: str):
         try:
-            abs_path = self.path_creator.create_absolute_path(user_id, path_in_storage)
-            self.raise_if_goes_beyond_limits(abs_path, user_id, path_in_storage)
+            abs_path = self.path_creator.create_absolute_path(storage_id, path_in_storage)
+            self.raise_if_goes_beyond_limits(abs_path, storage_id, path_in_storage)
         except PathGoesBeyondLimits:
             raise APIPathGoesBeyondLimits(path_in_storage)
 

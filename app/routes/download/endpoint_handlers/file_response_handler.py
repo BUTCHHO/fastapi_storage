@@ -40,9 +40,9 @@ class FileResponseHandler:
         return self._make_response(absolute_path_file)
 
 
-    def get_response(self, user_id, entity_path_in_storage):
-        entity_path_in_storage = self.path_joiner.join_paths(str(user_id), entity_path_in_storage)
-        self.ensurer.ensure_path_safety(str(user_id), entity_path_in_storage)
+    def get_response(self, storage_id, entity_path_in_storage):
+        entity_path_in_storage = self.path_joiner.join_paths(storage_id, entity_path_in_storage)
+        self.ensurer.ensure_path_safety(storage_id, entity_path_in_storage)
         if not self.ensurer.is_exists(entity_path_in_storage):
             raise APIEntityDoesNotExists(entity_path_in_storage)
         if self.storage_reader.is_dir(entity_path_in_storage):
