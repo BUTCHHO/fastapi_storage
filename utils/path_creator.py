@@ -15,16 +15,13 @@ class PathJoiner:
         new_path = Path(path1, path2)
         return new_path.__str__()
 
-    def join_with_root_path(self, path:str | int):
-        if isinstance(path, int):
-            path = str(path)
+    def join_with_root_path(self, path:str):
         return self.join_paths(self.root_path, path)
 
-    def create_absolute_path(self, user_id, entity_path_in_storage):
+    def create_absolute_entity_path(self, storage_id, entity_path_in_storage):
         if entity_path_in_storage is None:
             entity_path_in_storage = ''
-        user_id = str(user_id)
-        abs_user_dir_path = self.create_absolute_user_dir_path(user_id)
+        abs_user_dir_path = self.create_absolute_user_dir_path(storage_id)
         abs_path = self.join_paths(abs_user_dir_path, entity_path_in_storage)
         return abs_path
 

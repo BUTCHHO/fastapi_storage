@@ -20,7 +20,7 @@ class AuthHandler:
         try:
             if request.cookies.get('session_id'):
                 return
-            session_id = self.authenticator.make_session_by_name_and_psw(name, password)
+            session_id = self.authenticator.auth_by_name_and_psw(name, password)
             self.set_session_id_cookie(session_id, response)
         except IncorrectPassword:
             raise APIIncorrectPassword(password)

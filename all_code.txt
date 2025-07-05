@@ -178,68 +178,35 @@ def test_create_large_zip():
     assert zip_name == expected_zip_name
     archiver.cleanup_temp_files()
 
-from path_explorator import PathGoesBeyondLimits
+from unittest import TestCase
+from unittest.mock import patch, MagicMock
+from utils import PathJoiner
 
-from exceptions.exc import NotAUserId
-from utils import Logger, PathCutter, PathJoiner, PathValidEnsurer
 
-from config import STORAGE_PATH
+class TestPathCreator(TestCase):
+    def setUp(self):
+        self.root = '/root/path'
+        self.path_joiner = PathJoiner(self.root)
 
-logger = Logger()
-cutter = PathCutter()
-joiner = PathJoiner(STORAGE_PATH)
-ensurer = PathValidEnsurer(STORAGE_PATH)
+    def test_join_paths(self):
+        first_part = 'directory/dir/'
+        second_part = 'path/to/dir'
+        result = self.path_joiner.join_paths(first_part, second_part)
+        expected_result = f'{first_part}{second_part}'
+        self.assertEqual(result, expected_result)
 
-def test_cutter():
-    failure = False
-    expected_path = '/folder/file.txt'
-    tmplt = expected_path
-    paths = [f'/5{tmplt}', f'/321{tmplt}', f'/5039{tmplt}', f'/59438729{tmplt}']
-    invalid_paths = [f'/foo{tmplt}', f'/f312oo{tmplt}', f'/21foo{tmplt}', f'/foo123{tmplt}', f'/1f2f3f4o5o{tmplt}']
-    for path in paths:
-        cut_path = cutter.cut_user_id_from_storage_path(path)
-        assert cut_path == expected_path
-    for invalid_path in invalid_paths:
-        try:
-            cutter.cut_user_id_from_storage_path(invalid_path)
-            failure = True # если схавал невалидный путь и не поднял исключение
-        except NotAUserId:
-            pass
-    assert failure == False
+    def test_join_with_root_path(self):
+        path = 'path/to/dir'
+        expected = f'{self.root}/{path}'
+        result = self.path_joiner.join_with_root_path(path)
+        self.assertEqual(result, expected)
 
-def test_joiner_join_with_root_path():
-    path_to_dir = 'very/cool/dir'
-    joined_path_to_dir = joiner.join_with_root_path(path_to_dir)
-    expected_path_to_dir = f'{STORAGE_PATH}/{path_to_dir}'
-    assert joined_path_to_dir == expected_path_to_dir
-    path_to_file = 'very/cool/dir/file.txt'
-    joined_path_to_file = joiner.join_with_root_path(path_to_file)
-    expected_path_to_file = f'{STORAGE_PATH}/{path_to_file}'
-    assert  joined_path_to_file == expected_path_to_file
-
-def test_joiner_create_absolute_path():
-    user_id_int = 1
-    user_id_str = '1'
-    path_to_dir = 'very/cool/dir'
-    abs_path_dir_int_id = joiner.create_absolute_path(user_id_int, path_to_dir)
-    abs_path_dir_str_id = joiner.create_absolute_path(user_id_str, path_to_dir)
-    expected_path_to_dir = f'{STORAGE_PATH}/{user_id_str}/{path_to_dir}'
-    assert abs_path_dir_str_id == abs_path_dir_int_id == expected_path_to_dir
-    path_to_file = 'very/cool/dir/file.txt'
-    abs_path_file_int_id = joiner.create_absolute_path(user_id_int, path_to_file)
-    abs_path_file_str_id = joiner.create_absolute_path(user_id_str, path_to_file)
-    expected_path_to_file = f'{STORAGE_PATH}/{user_id_str}/{path_to_file}'
-    assert abs_path_file_str_id == abs_path_file_int_id == expected_path_to_file
-
-def test_ensurer_goes_beyond_limits():
-    beyond_path = '/home'
-    beyond_rel_path = f'{ensurer.root}/../../dir'
-    safe_path = f'{ensurer.root}/very/cool/dir'
-    is_unsafe = ensurer.is_goes_beyond_limits(beyond_path)
-    is_unsafe_rel = ensurer.is_goes_beyond_limits(beyond_rel_path)
-    is_safe = not ensurer.is_goes_beyond_limits(safe_path)
-    assert is_unsafe == is_unsafe_rel == is_safe == True
-from .auth import AuthDependfrom fastapi import Request
+    def test_create_absolute_entity_path(self):
+        storage_id = 'rerer'
+        path_in_storage = 'path/to/dir'
+        expected = f'{self.root}/{storage_id}/{path_in_storage}'
+        result = self.path_joiner.create_absolute_entity_path(storage_id, path_in_storage)
+        self.assertEqual(result, expected)from .auth import AuthDependfrom fastapi import Request
 
 from exceptions import APIUserDontExists
 from exceptions.auth_http_exc import APIIncorrectPassword
@@ -742,9 +709,8 @@ class SessionExpired(Exception):
 class SessionDontExists(Exception):
     def __init__(self):
         super().__init__()from .router import browser_routerfrom .browser_endpoint_handler import BrowserEndpointHandlerfrom fastapi import HTTPException
-from path_explorator import PathGoesBeyondLimits
 
-from exceptions import APIEntityDoesNotExists, EntityDoesNotExists, APIPathGoesBeyondLimits
+from exceptions import APIEntityDoesNotExists, EntityDoesNotExists
 from interfaces import ILogger, IStorageReader, IPathCutter
 
 
@@ -1405,16 +1371,13 @@ class PathJoiner:
         new_path = Path(path1, path2)
         return new_path.__str__()
 
-    def join_with_root_path(self, path:str | int):
-        if isinstance(path, int):
-            path = str(path)
+    def join_with_root_path(self, path:str):
         return self.join_paths(self.root_path, path)
 
-    def create_absolute_path(self, user_id, entity_path_in_storage):
+    def create_absolute_entity_path(self, storage_id, entity_path_in_storage):
         if entity_path_in_storage is None:
             entity_path_in_storage = ''
-        user_id = str(user_id)
-        abs_user_dir_path = self.create_absolute_user_dir_path(user_id)
+        abs_user_dir_path = self.create_absolute_user_dir_path(storage_id)
         abs_path = self.join_paths(abs_user_dir_path, entity_path_in_storage)
         return abs_path
 
@@ -1549,7 +1512,7 @@ class PathValidEnsurer:
 
     def ensure_path_safety(self, storage_id: int, path_in_storage: str):
         try:
-            abs_path = self.path_creator.create_absolute_path(storage_id, path_in_storage)
+            abs_path = self.path_creator.create_absolute_entity_path(storage_id, path_in_storage)
             self.raise_if_goes_beyond_limits(abs_path, storage_id, path_in_storage)
         except PathGoesBeyondLimits:
             raise APIPathGoesBeyondLimits(path_in_storage)

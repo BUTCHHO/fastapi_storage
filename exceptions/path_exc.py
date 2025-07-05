@@ -1,1 +1,1 @@
-from path_explorator.exceptions import EntityDoesNotExists, EntityIsNotADir
+from path_explorator.exceptions import EntityDoesNotExists, EntityIsNotADir, PathGoesBeyondLimits

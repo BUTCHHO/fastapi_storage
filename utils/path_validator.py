@@ -1,5 +1,5 @@
 from exceptions import APIPathGoesBeyondLimits
-from path_explorator import PathGoesBeyondLimits, EntityDoesNotExists
+from exceptions import EntityDoesNotExists, PathGoesBeyondLimits
 from interfaces import IPathCutter
 from pathlib import Path
 
@@ -8,21 +8,8 @@ class PathValidEnsurer:
 
     def __init__(self, root_dir, path_cutter, path_creator):
         self.path_cutter: IPathCutter = path_cutter
-        self.path_creator = path_creator
+        self.path_joiner = path_creator
         self.root_dir = root_dir
-
-    def does_contain_uplinks(self, path:str | Path):
-        path = Path(self.root_dir, path)
-        if ('..', '.', './') in path.parts:
-            return True
-        return False
-
-    def does_contain_symlinks_and_uplinks(self, path:str):
-        path = Path(self.root_dir, path)
-        if path.is_symlink() and self.does_contain_uplinks(path):
-            return True
-        return False
-
 
     def is_goes_beyond_limits(self, requesting_path: str | None):
         return not self.is_path_rel_to_another_path(requesting_path, self.root_dir.__str__())
@@ -79,11 +66,17 @@ class PathValidEnsurer:
         return entity.is_dir()
 
 
-    def raise_if_goes_beyond_limits(self, abs_path: str, storage_id, requesting_path:str):
-        user_directory = self.path_creator.create_absolute_user_dir_path(storage_id)
-        if self.is_goes_beyond_limits(abs_path):
+
+    def raise_if_goes_beyond_limits(self, limiting_path: str, requesting_path:str):
+        """
+
+        :param limiting_path:
+        :param requesting_path:
+        :return:
+        """
+        if self.is_goes_beyond_limits(limiting_path):
             raise PathGoesBeyondLimits(requesting_path)
-        if not self.is_path_rel_to_another_path(abs_path, user_directory):
+        if not self.is_path_rel_to_another_path(requesting_path, limiting_path):
             raise PathGoesBeyondLimits(requesting_path)
 
     def raise_if_entity_dont_exists(self, path:str):
@@ -92,8 +85,9 @@ class PathValidEnsurer:
 
     def ensure_path_safety(self, storage_id: int, path_in_storage: str):
         try:
-            abs_path = self.path_creator.create_absolute_path(storage_id, path_in_storage)
-            self.raise_if_goes_beyond_limits(abs_path, storage_id, path_in_storage)
+            abs_requesting_path = self.path_joiner.create_absolute_entity_path(storage_id, path_in_storage)
+            abs_limiting_path = self.path_joiner.create_absolute_user_dir_path(storage_id)
+            self.raise_if_goes_beyond_limits(abs_limiting_path, abs_requesting_path)
         except PathGoesBeyondLimits:
             raise APIPathGoesBeyondLimits(path_in_storage)
 

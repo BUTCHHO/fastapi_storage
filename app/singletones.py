@@ -4,7 +4,7 @@ from auth.user_deleter import UserDeleter
 from utils import Logger, TimeHandler, PathCutter, PathJoiner, PathValidEnsurer, Hasher
 from logic import StorageReader, StorageWriter, Archivator, StorageDeleter
 from db_repository import ModelReader, ModelActor
-from auth import UserRegistration, UserLogout, UserAuthentication ,SessionValidator, SessionMaker, SessionDeleter, UserGetter
+from auth import UserRegistration, SessionGetter, UserLogout, UserAuthentication ,SessionValidator, SessionMaker, SessionDeleter, UserGetter
 from cache_handler import RedisCacher
 from alchemy import User, Session
 
@@ -29,8 +29,9 @@ session_actor = ModelActor(Session, logger)
 session_deleter = SessionDeleter(redis_cacher, session_actor, session_reader)
 session_validator = SessionValidator(time_handler, session_deleter)
 session_maker = SessionMaker(int(SESSION_EXPIRE_TIME), session_actor, time_handler, hasher, redis_cacher)
+session_getter = SessionGetter(session_reader, redis_cacher, session_validator, session_deleter)
 user_getter = UserGetter(user_reader, session_reader, redis_cacher, session_validator)
 user_registrator = UserRegistration(user_actor, hasher, logger)
-user_authenticator = UserAuthentication(user_reader, session_maker, user_getter, logger, hasher)
+user_authenticator = UserAuthentication(user_reader, session_getter, session_maker, user_getter, logger, hasher)
 user_logouter = UserLogout(session_deleter)
 user_deleter = UserDeleter(user_actor)

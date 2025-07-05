@@ -14,5 +14,5 @@ class SessionValidator:
     def validate_session_or_raise(self, session):
         if self.is_session_expired(session.expire_date):
             self.session_deleter.delete_session(session.id)
-            raise SessionExpired()
+            raise SessionExpired
         return True

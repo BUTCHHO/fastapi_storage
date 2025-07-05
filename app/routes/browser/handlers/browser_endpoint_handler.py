@@ -31,8 +31,9 @@ class BrowserEndpointHandler:
             return entitynames
         except EntityDoesNotExists:
             raise APIEntityDoesNotExists(path_in_storage)
-        except Exception as e:
-            self.logger.log(e)
+        except PathGoesBeyondLimits:
+            raise APIPathGoesBeyondLimits(path_in_storage)
+
 
     def _recursively_get_entities_by_pattern(self, pattern:str, searching_in):
         entities = self.storage_reader.find_entities_path(searching_in, pattern)
