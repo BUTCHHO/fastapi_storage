@@ -25,7 +25,6 @@ class BrowserEndpointHandler:
         try:
             if path_in_storage is None:
                 path_in_storage = ''
-            self.path_ensurer.ensure_path_safety(storage_id, path_in_storage)
             path_in_storage_with_id = self.path_joiner.join_paths(storage_id, path_in_storage)
             entitynames = self._get_all_entitynames_in_dir(path_in_storage_with_id)
             return entitynames

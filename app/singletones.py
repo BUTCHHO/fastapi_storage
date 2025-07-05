@@ -7,6 +7,7 @@ from db_repository import ModelReader, ModelActor
 from auth import UserRegistration, SessionGetter, UserLogout, UserAuthentication ,SessionValidator, SessionMaker, SessionDeleter, UserGetter
 from cache_handler import RedisCacher
 from alchemy import User, Session
+from alchemy.async_engine import async_engine
 
 from config import STORAGE_PATH, CACHE_EXPIRE_TIME, CACHE_HOST, CACHE_PORT, SESSION_EXPIRE_TIME
 
@@ -22,10 +23,10 @@ storage_writer = StorageWriter(STORAGE_PATH)
 storage_deleter = StorageDeleter(storage_writer)
 hasher = Hasher()
 redis_cacher = RedisCacher(redis_client, CACHE_EXPIRE_TIME)
-user_reader = ModelReader(User, logger)
-user_actor = ModelActor(User, logger)
-session_reader = ModelReader(Session, logger)
-session_actor = ModelActor(Session, logger)
+user_reader = ModelReader(User, logger, async_engine)
+user_actor = ModelActor(User, logger, async_engine)
+session_reader = ModelReader(Session, logger, async_engine)
+session_actor = ModelActor(Session, logger, async_engine)
 session_deleter = SessionDeleter(redis_cacher, session_actor, session_reader)
 session_validator = SessionValidator(time_handler, session_deleter)
 session_maker = SessionMaker(int(SESSION_EXPIRE_TIME), session_actor, time_handler, hasher, redis_cacher)

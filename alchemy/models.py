@@ -1,10 +1,7 @@
-from sqlalchemy import Column, Integer, String, Boolean, create_engine, Date, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, Date, ForeignKey
 from sqlalchemy.orm import declarative_base
-
-from config import DATABASE_URL
-
-engine = create_engine(DATABASE_URL)
-
+from asyncio import run
+from .async_engine import async_engine
 
 Base = declarative_base()
 
@@ -26,5 +23,8 @@ class Session(Base):
     user_id = Column(Integer, ForeignKey(User.id), unique=True)
     expire_date = Column(Date)
 
-Base.metadata.create_all(bind=engine)
+async def create_tables():
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
+run(create_tables())

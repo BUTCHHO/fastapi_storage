@@ -1,5 +1,4 @@
-from pydantic import BaseModel, Field
-
+from pydantic import BaseModel
 
 class BrowserGetEntitiesQuery(BaseModel):
     path_in_storage: str | None = None

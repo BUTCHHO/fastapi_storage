@@ -11,7 +11,7 @@ class APITooManyFiles(HTTPException):
         status_code = 429
         super().__init__(detail, status_code)from .path_http_exc import APIPathGoesBeyondLimits, APIUserStorageAlreadyExists, APIDirectoryAlreadyExists, APIEntityDoesNotExists, APIUnsupportedEntityType
 from .exc import NotAUserId
-from .path_exc import EntityDoesNotExists, EntityIsNotADir
+from .path_exc import EntityDoesNotExists, EntityIsNotADir, PathGoesBeyondLimits
 from .auth_http_exc import APIUserAlreadyExists, APIUserDontExists, APIIncorrectPassword, APISessionDontExists, APISessionExpired, APIUnauthorized
 from .config_exc import StoragePathIsNone, DatabaseUrlIsNone, CacheHostIsNone, CachePortIsNone, CacheExpireTimeIsNone, SessionMakerKeyIsNone
 from .http_files_exc import APITooManyFilesclass StoragePathIsNone(Exception):
@@ -116,7 +116,7 @@ class APIDirectoryAlreadyExists(HTTPException):
         detail = {"message": f'Directory at {path} already exists', "code":'diractory_already_exists'}
         super().__init__(status_code, detail)
 
-from path_explorator.exceptions import EntityDoesNotExists, EntityIsNotADirfrom http.client import responses
+from path_explorator.exceptions import EntityDoesNotExists, EntityIsNotADir, PathGoesBeyondLimitsfrom http.client import responses
 
 from fastapi import UploadFile
 from fastapi.testclient import TestClient
@@ -165,7 +165,16 @@ def test_download_file():
     assert content_len > 0
 
 def test_upload_entity():
-    print('not_impl')from logic import Archivator
+    print('not_impl')from unittest import TestCase
+from unittest.mock import patch
+
+
+class TestPathValidEnsurer(TestCase):
+    def setUp(self):
+        pass
+
+
+    def test_raise_if_goes_beyond_limits(self):from logic import Archivator
 from config import STORAGE_PATH
 
 archiver = Archivator()
@@ -206,7 +215,8 @@ class TestPathCreator(TestCase):
         path_in_storage = 'path/to/dir'
         expected = f'{self.root}/{storage_id}/{path_in_storage}'
         result = self.path_joiner.create_absolute_entity_path(storage_id, path_in_storage)
-        self.assertEqual(result, expected)from .auth import AuthDependfrom fastapi import Request
+        self.assertEqual(result, expected)
+from .auth import AuthDependfrom fastapi import Request
 
 from exceptions import APIUserDontExists
 from exceptions.auth_http_exc import APIIncorrectPassword
@@ -506,7 +516,30 @@ class UserDeleter:
 
     def delete_user_by_id(self, user_id):
         #make sure to delete session_id from user's cookies and from db
-        self.user_actor.delete_record_by_id(user_id)from interfaces import IModelActor
+        self.user_actor.delete_record_by_id(user_id)from auth.exceptions import SessionDontExists, SessionExpired
+
+
+class SessionGetter:
+    def __init__(self, session_reader, cacher, session_validator, session_deleter):
+        self.session_reader = session_reader
+        self.cacher = cacher
+        self.session_validator = session_validator
+        self.session_deleter = session_deleter
+
+    def get_session_from_db(self, user_id):
+        return self.session_reader.get_by_kwargs(user_id=user_id)
+
+    def get_session_id_by_user_id(self, user_id):
+        session = self.get_session_from_db(user_id)
+        if session is None:
+            raise SessionDontExists
+        try:
+            self.session_validator.validate_session_or_raise(session)
+        except SessionExpired:
+            self.session_deleter.delete_session(session)
+            raise
+        return session
+from interfaces import IModelActor
 from interfaces import IModelReader
 
 class SessionDeleter:
@@ -532,7 +565,8 @@ from .registration import UserRegistration
 from .session_validator import SessionValidator
 from .authentication import UserAuthentication
 from .session_deleter import SessionDeleter
-from .logout_user import UserLogoutfrom .exceptions import SessionDontExists
+from .logout_user import UserLogout
+from .session_getter import SessionGetterfrom .exceptions import SessionDontExists
 
 
 class UserGetter:
@@ -579,19 +613,21 @@ class SessionValidator:
     def validate_session_or_raise(self, session):
         if self.is_session_expired(session.expire_date):
             self.session_deleter.delete_session(session.id)
-            raise SessionExpired()
+            raise SessionExpired
         return True
+from exceptions.database_repo import FieldUniqueViolation
 from interfaces import IModelReader
-from .exceptions import UserDontExists, IncorrectPassword
+from .exceptions import UserDontExists, IncorrectPassword, SessionDontExists, SessionExpired
 
 
 class UserAuthentication:
-    def __init__(self, user_reader, session_maker, user_getter, logger, hasher):
+    def __init__(self, user_reader, session_getter, session_maker, user_getter, logger, hasher):
         self.user_reader: IModelReader = user_reader
         self.session_maker = session_maker
         self.hasher = hasher
         self.logger = logger
         self.user_getter = user_getter
+        self.session_getter = session_getter
 
 
     def _get_user_by_name(self, name):
@@ -603,16 +639,19 @@ class UserAuthentication:
         if not self.hasher.check_password(psw, user.password):
             raise IncorrectPassword
 
-    def _make_session(self, user_id):
-        return self.session_maker.make_session(user_id)
+    def _get_session_by_user_id(self, user_id):
+        return self.session_getter.get_session_id_by_user_id(user_id)
 
-    def make_session_by_name_and_psw(self, name, psw):
+
+    def auth_by_name_and_psw(self, name, psw):
         user = self._get_user_by_name(name)
         if user is None:
             raise UserDontExists
         self.validate_user_and_password(name, user, psw)
-        session_id = self._make_session(user.id)
-        return session_id
+        try:
+            return self._get_session_by_user_id(user.id)
+        except SessionDontExists or SessionExpired:
+            return self.session_maker.make_session(user.id)
 
     def auth_by_session_id(self, session_id):
         return self.user_getter.get_user_by_session_id(session_id)
@@ -709,8 +748,9 @@ class SessionExpired(Exception):
 class SessionDontExists(Exception):
     def __init__(self):
         super().__init__()from .router import browser_routerfrom .browser_endpoint_handler import BrowserEndpointHandlerfrom fastapi import HTTPException
+from path_explorator import PathGoesBeyondLimits
 
-from exceptions import APIEntityDoesNotExists, EntityDoesNotExists
+from exceptions import APIEntityDoesNotExists, EntityDoesNotExists, APIPathGoesBeyondLimits
 from interfaces import ILogger, IStorageReader, IPathCutter
 
 
@@ -740,8 +780,9 @@ class BrowserEndpointHandler:
             return entitynames
         except EntityDoesNotExists:
             raise APIEntityDoesNotExists(path_in_storage)
-        except Exception as e:
-            self.logger.log(e)
+        except PathGoesBeyondLimits:
+            raise APIPathGoesBeyondLimits(path_in_storage)
+
 
     def _recursively_get_entities_by_pattern(self, pattern:str, searching_in):
         entities = self.storage_reader.find_entities_path(searching_in, pattern)
@@ -1057,7 +1098,7 @@ class AuthHandler:
         try:
             if request.cookies.get('session_id'):
                 return
-            session_id = self.authenticator.make_session_by_name_and_psw(name, password)
+            session_id = self.authenticator.auth_by_name_and_psw(name, password)
             self.set_session_id_cookie(session_id, response)
         except IncorrectPassword:
             raise APIIncorrectPassword(password)
@@ -1245,7 +1286,7 @@ from auth.user_deleter import UserDeleter
 from utils import Logger, TimeHandler, PathCutter, PathJoiner, PathValidEnsurer, Hasher
 from logic import StorageReader, StorageWriter, Archivator, StorageDeleter
 from db_repository import ModelReader, ModelActor
-from auth import UserRegistration, UserLogout, UserAuthentication ,SessionValidator, SessionMaker, SessionDeleter, UserGetter
+from auth import UserRegistration, SessionGetter, UserLogout, UserAuthentication ,SessionValidator, SessionMaker, SessionDeleter, UserGetter
 from cache_handler import RedisCacher
 from alchemy import User, Session
 
@@ -1270,9 +1311,10 @@ session_actor = ModelActor(Session, logger)
 session_deleter = SessionDeleter(redis_cacher, session_actor, session_reader)
 session_validator = SessionValidator(time_handler, session_deleter)
 session_maker = SessionMaker(int(SESSION_EXPIRE_TIME), session_actor, time_handler, hasher, redis_cacher)
+session_getter = SessionGetter(session_reader, redis_cacher, session_validator, session_deleter)
 user_getter = UserGetter(user_reader, session_reader, redis_cacher, session_validator)
 user_registrator = UserRegistration(user_actor, hasher, logger)
-user_authenticator = UserAuthentication(user_reader, session_maker, user_getter, logger, hasher)
+user_authenticator = UserAuthentication(user_reader, session_getter, session_maker, user_getter, logger, hasher)
 user_logouter = UserLogout(session_deleter)
 user_deleter = UserDeleter(user_actor)from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -1419,7 +1461,7 @@ class Logger:
                 Logger.log(e)
         return wrapper
 from exceptions import APIPathGoesBeyondLimits
-from path_explorator import PathGoesBeyondLimits, EntityDoesNotExists
+from exceptions import EntityDoesNotExists, PathGoesBeyondLimits
 from interfaces import IPathCutter
 from pathlib import Path
 
@@ -1428,21 +1470,8 @@ class PathValidEnsurer:
 
     def __init__(self, root_dir, path_cutter, path_creator):
         self.path_cutter: IPathCutter = path_cutter
-        self.path_creator = path_creator
+        self.path_joiner = path_creator
         self.root_dir = root_dir
-
-    def does_contain_uplinks(self, path:str | Path):
-        path = Path(self.root_dir, path)
-        if ('..', '.', './') in path.parts:
-            return True
-        return False
-
-    def does_contain_symlinks_and_uplinks(self, path:str):
-        path = Path(self.root_dir, path)
-        if path.is_symlink() and self.does_contain_uplinks(path):
-            return True
-        return False
-
 
     def is_goes_beyond_limits(self, requesting_path: str | None):
         return not self.is_path_rel_to_another_path(requesting_path, self.root_dir.__str__())
@@ -1499,11 +1528,17 @@ class PathValidEnsurer:
         return entity.is_dir()
 
 
-    def raise_if_goes_beyond_limits(self, abs_path: str, storage_id, requesting_path:str):
-        user_directory = self.path_creator.create_absolute_user_dir_path(storage_id)
-        if self.is_goes_beyond_limits(abs_path):
+
+    def raise_if_goes_beyond_limits(self, limiting_path: str, requesting_path:str):
+        """
+
+        :param limiting_path:
+        :param requesting_path:
+        :return:
+        """
+        if self.is_goes_beyond_limits(limiting_path):
             raise PathGoesBeyondLimits(requesting_path)
-        if not self.is_path_rel_to_another_path(abs_path, user_directory):
+        if not self.is_path_rel_to_another_path(requesting_path, limiting_path):
             raise PathGoesBeyondLimits(requesting_path)
 
     def raise_if_entity_dont_exists(self, path:str):
@@ -1512,8 +1547,9 @@ class PathValidEnsurer:
 
     def ensure_path_safety(self, storage_id: int, path_in_storage: str):
         try:
-            abs_path = self.path_creator.create_absolute_entity_path(storage_id, path_in_storage)
-            self.raise_if_goes_beyond_limits(abs_path, storage_id, path_in_storage)
+            abs_requesting_path = self.path_joiner.create_absolute_entity_path(storage_id, path_in_storage)
+            abs_limiting_path = self.path_joiner.create_absolute_user_dir_path(storage_id)
+            self.raise_if_goes_beyond_limits(abs_limiting_path, abs_requesting_path)
         except PathGoesBeyondLimits:
             raise APIPathGoesBeyondLimits(path_in_storage)
 
