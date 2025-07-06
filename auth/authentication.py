@@ -1,4 +1,3 @@
-from exceptions.database_repo import FieldUniqueViolation
 from interfaces import IModelReader
 from .exceptions import UserDontExists, IncorrectPassword, SessionDontExists, SessionExpired
 
