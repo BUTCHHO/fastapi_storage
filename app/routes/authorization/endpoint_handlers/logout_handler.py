@@ -8,9 +8,9 @@ class LogOutHandler:
         self.logouter = user_logouter
         self.logger = logger
 
-    def logout_user(self, request: Request, response: Response):
+    async def logout_user(self, request: Request, response: Response):
         try:
-            self.logouter.logout_user(request, response)
+            await self.logouter.logout_user(request, response)
         except FieldUniqueViolation:
             return
         except Exception as e:

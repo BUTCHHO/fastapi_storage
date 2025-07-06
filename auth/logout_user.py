@@ -4,7 +4,7 @@ class UserLogout:
 
 
 
-    def logout_user(self, request, response):
+    async def logout_user(self, request, response):
         """
         :param response: something to get cookies from
         :param request: something to put/delete cookies from
@@ -15,4 +15,4 @@ class UserLogout:
         if session_id is None:
             return
         response.delete_cookie('session_id')
-        self.session_deleter.delete_session(session_id)
+        await self.session_deleter.delete_session(session_id)

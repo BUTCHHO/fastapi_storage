@@ -13,8 +13,8 @@ auth_handler = AuthHandler(user_authenticator)
 
 
 @auth_router.get('/_logout', name='auth-logout')
-def log_out_endpoint(request: Request, response: Response):
-    logout_handler.logout_user(request, response)
+async def log_out_endpoint(request: Request, response: Response):
+    await logout_handler.logout_user(request, response)
 
 
 @auth_router.post('/_sign-up', name='auth-sign_up')
