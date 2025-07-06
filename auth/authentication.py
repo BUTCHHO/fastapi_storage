@@ -36,7 +36,7 @@ class UserAuthentication:
         except SessionDontExists or SessionExpired:
             return await self.session_maker.make_session(user.id)
 
-    def auth_by_session_id(self, session_id):
+    async def auth_by_session_id(self, session_id):
         return await self.user_getter.get_user_by_session_id(session_id)
 
 
