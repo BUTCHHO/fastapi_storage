@@ -23,8 +23,8 @@ def sign_up_endpoint(params: SignUpQuery = Query()):
     return {"message": 'successfully signed up'}
 
 @auth_router.post('/_log-in', name='auth-login')
-def authenticate(response: Response, request: Request, params: AuthenticateQuery = Query()):
-    auth_handler.auth_with_psw_and_set_session_cookie(params.name, params.password, response, request)
+async def authenticate(response: Response, request: Request, params: AuthenticateQuery = Query()):
+    await auth_handler.auth_with_psw_and_set_session_cookie(params.name, params.password, response, request)
     return {"message": 'successfully logged_in'}
 
 

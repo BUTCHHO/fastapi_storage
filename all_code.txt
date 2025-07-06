@@ -267,8 +267,8 @@ assert SESSION_COOKIES_EXPIRE_TIME is not None
 assert CACHE_PORT is not None
 assert CACHE_HOST is not None
 assert CACHE_EXPIRE_TIME is not None
-from .reader import ModelReader
-from .actor import ModelActorfrom sqlalchemy.exc import IntegrityError
+from .async_access.reader import ModelReader
+from .async_access.async_actor import ModelActorfrom sqlalchemy.exc import IntegrityError
 from psycopg2.errors import UniqueViolation
 from exceptions.database_repo import FieldUniqueViolation
 
@@ -329,11 +329,72 @@ class ModelActor(ParentAccess):
             self.logger.log(e)
             session.rollback()
         finally:
-            session.close()from sqlalchemy.orm import sessionmaker
-from alchemy.models import engine
+            session.close()from sqlalchemy.ext.asyncio import async_sessionmaker
 
 class ParentAccess:
-    def __init__(self, model, logger):
+    def __init__(self, model, logger, engine):
+        self.model = model
+        self.logger = logger
+        self.engine = engine
+        self.async_session_maker = async_sessionmaker(engine)
+
+    @staticmethod
+    def async_connection(method):
+        async def wrapper(self, *args, **kwargs):
+            async with self.async_session_maker() as session:
+                try:
+                    return await method(self, session=session, **kwargs)
+                except Exception as e:
+                    await session.rollback()
+                    raise
+        return wrapper
+from db_repository.async_access.async_parent_access import ParentAccess
+from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy import select
+
+class ModelReader(ParentAccess):
+    def __init__(self, model, logger, engine):
+        self.session = async_sessionmaker(engine, expire_on_commit=False)
+        super().__init__(model, logger, engine)
+
+    @ParentAccess.async_connection
+    async def get_by_kwargs(self,session, **kwargs):
+        statement = select(self.model).filter_by(**kwargs).limit(1)
+        result = await session.execute(statement)
+        return result.scalar_one_or_none()
+
+    @ParentAccess.async_connection
+    async def get_by_id(self, session, id):
+        statement = select(self.model).filter_by(id=id).limit(1)
+        result = await session.execute(statement)
+        return result.scalar_or_none()
+
+from sqlalchemy import insert, delete
+
+from db_repository.async_access.async_parent_access import ParentAccess
+
+
+class ModelActor(ParentAccess):
+    def __init__(self, model, logger, engine):
+        super().__init__(model,logger,engine)
+
+    def create_record(self, **kwargs):
+        return self.model(**kwargs)
+
+    @ParentAccess.async_connection
+    async def create_and_write_record_to_db(self, session, **kwargs):
+        record = self.create_record(**kwargs)
+        session.add(record)
+        await session.commit()
+
+    @ParentAccess.async_connection
+    async def delete_record_by_kwargs(self, session, **kwargs):
+        statement = delete(self.model).filter_by(**kwargs)
+        await session.execute(statement)
+        await session.commit()from sqlalchemy.orm import sessionmaker
+
+class ParentAccess:
+    def __init__(self, model, logger, engine):
         self.session = sessionmaker(engine)
         self.model = model
         self.logger = loggerfrom sqlalchemy.orm import Session
@@ -774,7 +835,6 @@ class BrowserEndpointHandler:
         try:
             if path_in_storage is None:
                 path_in_storage = ''
-            self.path_ensurer.ensure_path_safety(storage_id, path_in_storage)
             path_in_storage_with_id = self.path_joiner.join_paths(storage_id, path_in_storage)
             entitynames = self._get_all_entitynames_in_dir(path_in_storage_with_id)
             return entitynames
@@ -859,8 +919,7 @@ class GetEntitiesResponse(BaseModel):
     entities: list[str] | list
 
 class SearchEntitiesResponse(BaseModel):
-    entities: list[str] | listfrom pydantic import BaseModel, Field
-
+    entities: list[str] | listfrom pydantic import BaseModel
 
 class BrowserGetEntitiesQuery(BaseModel):
     path_in_storage: str | None = None
@@ -1276,8 +1335,8 @@ class SettingsHandler:
             if should_delete:
                 self.delete_storage(user_id)
         except Exception as e:
-            self.logger.log(e)from app.routes.authorization.router import auth_handler
-from depends import AuthDepend
+            self.logger.log(e)from depends import AuthDepend
+from app.routes.authorization.router import auth_handler
 
 auth_depend = AuthDepend(auth_handler)
 from redis import Redis
@@ -1289,6 +1348,7 @@ from db_repository import ModelReader, ModelActor
 from auth import UserRegistration, SessionGetter, UserLogout, UserAuthentication ,SessionValidator, SessionMaker, SessionDeleter, UserGetter
 from cache_handler import RedisCacher
 from alchemy import User, Session
+from alchemy.async_engine import async_engine
 
 from config import STORAGE_PATH, CACHE_EXPIRE_TIME, CACHE_HOST, CACHE_PORT, SESSION_EXPIRE_TIME
 
@@ -1304,10 +1364,10 @@ storage_writer = StorageWriter(STORAGE_PATH)
 storage_deleter = StorageDeleter(storage_writer)
 hasher = Hasher()
 redis_cacher = RedisCacher(redis_client, CACHE_EXPIRE_TIME)
-user_reader = ModelReader(User, logger)
-user_actor = ModelActor(User, logger)
-session_reader = ModelReader(Session, logger)
-session_actor = ModelActor(Session, logger)
+user_reader = ModelReader(User, logger, async_engine)
+user_actor = ModelActor(User, logger, async_engine)
+session_reader = ModelReader(Session, logger, async_engine)
+session_actor = ModelActor(Session, logger, async_engine)
 session_deleter = SessionDeleter(redis_cacher, session_actor, session_reader)
 session_validator = SessionValidator(time_handler, session_deleter)
 session_maker = SessionMaker(int(SESSION_EXPIRE_TIME), session_actor, time_handler, hasher, redis_cacher)
@@ -1554,13 +1614,14 @@ class PathValidEnsurer:
             raise APIPathGoesBeyondLimits(path_in_storage)
 
 
-from .models import User, Sessionfrom sqlalchemy import Column, Integer, String, Boolean, create_engine, Date, ForeignKey
-from sqlalchemy.orm import declarative_base
+from sqlalchemy import create_engine
 
 from config import DATABASE_URL
 
-engine = create_engine(DATABASE_URL)
-
+engine = create_engine(DATABASE_URL)from .models import User, Sessionfrom sqlalchemy import Column, Integer, String, Boolean, Date, ForeignKey
+from sqlalchemy.orm import declarative_base
+from asyncio import run
+from .async_engine import async_engine
 
 Base = declarative_base()
 
@@ -1582,9 +1643,13 @@ class Session(Base):
     user_id = Column(Integer, ForeignKey(User.id), unique=True)
     expire_date = Column(Date)
 
-Base.metadata.create_all(bind=engine)
+async def create_tables():
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
-from pathlib import Path
+run(create_tables())from sqlalchemy.ext.asyncio import create_async_engine
+
+async_engine = create_async_engine('postgresql+asyncpg://butcho:56745321@localhost:5432/cloud_storage', pool_pre_ping=True)from pathlib import Path
 from exceptions import EntityDoesNotExists, EntityIsNotADir
 
 
