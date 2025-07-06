@@ -11,11 +11,11 @@ class SessionDeleter:
         session = self.session_reader.get_by_kwargs(user_id=user_id)
         self.delete_session(session.id)
 
-    def delete_session(self, session_id):
+    async def delete_session(self, session_id):
         """
         MAKE SURE YOU DELETE SESSION_ID FROM USER COOKIES!!!
         :param session_id:
         :return:
         """
         self.cacher.delete_data(session_id)
-        self.session_actor.delete_record_by_id(session_id)
+        await self.session_actor.delete_record_by_id(session_id)

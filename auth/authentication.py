@@ -13,8 +13,8 @@ class UserAuthentication:
         self.session_getter = session_getter
 
 
-    def _get_user_by_name(self, name):
-        return self.user_reader.get_by_kwargs(name=name)
+    async def _get_user_by_name(self, name):
+        return await self.user_reader.get_by_kwargs(name=name)
 
     def validate_user_and_password(self, user_name, user, psw):
         if not user:
@@ -26,17 +26,17 @@ class UserAuthentication:
         return self.session_getter.get_session_id_by_user_id(user_id)
 
 
-    def auth_by_name_and_psw(self, name, psw):
-        user = self._get_user_by_name(name)
+    async def auth_by_name_and_psw(self, name, psw):
+        user = await self._get_user_by_name(name)
         if user is None:
             raise UserDontExists
         self.validate_user_and_password(name, user, psw)
         try:
-            return self._get_session_by_user_id(user.id)
+            return await self._get_session_by_user_id(user.id)
         except SessionDontExists or SessionExpired:
-            return self.session_maker.make_session(user.id)
+            return await self.session_maker.make_session(user.id)
 
     def auth_by_session_id(self, session_id):
-        return self.user_getter.get_user_by_session_id(session_id)
+        return await self.user_getter.get_user_by_session_id(session_id)
 
 
