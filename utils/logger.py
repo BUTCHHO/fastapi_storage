@@ -7,6 +7,7 @@ class Logger:
         self.logger = SiteLogger
 
     def log(self, exception):
+        raise
         print(f'{self.red_log}{exception}{self.red_log}')
 
     def decor_log(self, func):

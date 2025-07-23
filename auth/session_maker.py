@@ -15,15 +15,15 @@ class SessionMaker:
         hashed_id = self.hasher.create_session_id_hash()
         return hashed_id
 
-    def _create_session_obj(self, user_id):
+    async def _create_session_obj(self, user_id):
         session_id = self._create_session_id()
         expire_date = self._get_expire_date()
         session_record = self._access.create_record(id=session_id, expire_date=expire_date, user_id=user_id)
         return session_record
 
-    def make_session(self, user_id):
-        session = self._create_session_obj(user_id)
+    async def make_session(self, user_id):
+        session = await self._create_session_obj(user_id)
         session_id = session.id
-        self._access.write_record_to_db(session)
+        await self._access.write_record_to_db(record=session)
         self.cacher.put_data(session_id, user_id)
         return session_id

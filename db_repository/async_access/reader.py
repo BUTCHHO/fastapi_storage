@@ -13,9 +13,9 @@ class ModelReader(ParentAccess):
         result = await session.execute(statement)
         return result.scalar_one_or_none()
 
+
     @ParentAccess.async_connection
     async def get_by_id(self, session, id):
         statement = select(self.model).filter_by(id=id).limit(1)
         result = await session.execute(statement)
-        return result.scalar_or_none()
-
+        return result.scalar_one_or_none()

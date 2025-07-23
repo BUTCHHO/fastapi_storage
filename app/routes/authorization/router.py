@@ -18,8 +18,8 @@ async def log_out_endpoint(request: Request, response: Response):
 
 
 @auth_router.post('/_sign-up', name='auth-sign_up')
-def sign_up_endpoint(params: SignUpQuery = Query()):
-    sign_up_handler.sign_up(params)
+async def sign_up_endpoint(params: SignUpQuery = Query()):
+    await sign_up_handler.sign_up(params)
     return {"message": 'successfully signed up'}
 
 @auth_router.post('/_log-in', name='auth-login')

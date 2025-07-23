@@ -1,6 +1,8 @@
 from sqlalchemy import insert, delete
-
+from sqlalchemy.exc import IntegrityError
+from asyncpg.exceptions import UniqueViolationError
 from db_repository.async_access.async_parent_access import ParentAccess
+from exceptions.database_repo import FieldUniqueViolation
 
 
 class ModelActor(ParentAccess):
@@ -17,7 +19,18 @@ class ModelActor(ParentAccess):
         await session.commit()
 
     @ParentAccess.async_connection
+    async def write_record_to_db(self, session, record):
+        session.add(record)
+        await session.commit()
+
+    @ParentAccess.async_connection
     async def delete_record_by_kwargs(self, session, **kwargs):
         statement = delete(self.model).filter_by(**kwargs)
+        await session.execute(statement)
+        await session.commit()
+
+    @ParentAccess.async_connection
+    async def delete_record_by_id(self, session, id):
+        statement = delete(self.model).filter_by(id=id)
         await session.execute(statement)
         await session.commit()

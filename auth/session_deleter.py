@@ -18,4 +18,4 @@ class SessionDeleter:
         :return:
         """
         self.cacher.delete_data(session_id)
-        await self.session_actor.delete_record_by_id(session_id)
+        await self.session_actor.delete_record_by_id(id=session_id)

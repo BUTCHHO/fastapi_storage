@@ -1,3 +1,4 @@
 from sqlalchemy.ext.asyncio import create_async_engine
+from config import DATABASE_URL
 
-async_engine = create_async_engine('postgresql+asyncpg://butcho:56745321@localhost:5432/cloud_storage', pool_pre_ping=True)
+async_engine = create_async_engine(DATABASE_URL, pool_pre_ping=True)

@@ -84,11 +84,12 @@ class PathValidEnsurer:
             raise EntityDoesNotExists(path)
 
     def ensure_path_safety(self, storage_id: int, path_in_storage: str):
-        try:
-            abs_requesting_path = self.path_joiner.create_absolute_entity_path(storage_id, path_in_storage)
-            abs_limiting_path = self.path_joiner.create_absolute_user_dir_path(storage_id)
-            self.raise_if_goes_beyond_limits(abs_limiting_path, abs_requesting_path)
-        except PathGoesBeyondLimits:
-            raise APIPathGoesBeyondLimits(path_in_storage)
+        """
+        :raises: PathGoesBeyondLimits
+        """
+        abs_requesting_path = self.path_joiner.create_absolute_entity_path(storage_id, path_in_storage)
+        abs_limiting_path = self.path_joiner.create_absolute_user_dir_path(storage_id)
+        self.raise_if_goes_beyond_limits(abs_limiting_path, abs_requesting_path)
+
 
 

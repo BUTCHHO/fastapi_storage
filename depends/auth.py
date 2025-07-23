@@ -9,17 +9,17 @@ class AuthDepend:
     def __init__(self, auth_handler):
         self.auth_handler = auth_handler
 
-    def auth_allow_unauthorized(self, request: Request):
+    async def auth_allow_unauthorized(self, request: Request):
         try:
-            return self.auth(request)
+            return await self.auth(request)
         except APIUserDontExists:
             return None
         except APIUnauthorized:
             return None
 
-    def auth(self, request: Request):
+    async def auth(self, request: Request):
         session_id = request.cookies.get('session_id')
-        return self.auth_handler.auth_with_session_id(session_id)
+        return await self.auth_handler.auth_with_session_id(session_id)
 
     def ask_for_password(self, password, user):
         try:

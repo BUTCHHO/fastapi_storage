@@ -18,8 +18,6 @@ class AuthHandler:
 
     async def auth_with_psw_and_set_session_cookie(self, name, password, response: Response, request: Request):
         try:
-            if request.cookies.get('session_id'):
-                return
             session_id = await self.authenticator.auth_by_name_and_psw(name, password)
             self.set_session_id_cookie(session_id, response)
         except IncorrectPassword:

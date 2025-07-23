@@ -1,4 +1,7 @@
 from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy.exc import IntegrityError
+from asyncpg import UniqueViolationError
+from exceptions.database_repo import FieldUniqueViolation
 
 class ParentAccess:
     def __init__(self, model, logger, engine):
@@ -13,6 +16,10 @@ class ParentAccess:
             async with self.async_session_maker() as session:
                 try:
                     return await method(self, session=session, **kwargs)
+                except IntegrityError as i_e:
+                    if 'UniqueViolationError' in i_e.orig.__str__():
+                        raise FieldUniqueViolation()
+                    raise
                 except Exception as e:
                     await session.rollback()
                     raise

@@ -21,8 +21,8 @@ class UserAuthentication:
         if not self.hasher.check_password(psw, user.password):
             raise IncorrectPassword
 
-    def _get_session_by_user_id(self, user_id):
-        return self.session_getter.get_session_id_by_user_id(user_id)
+    async def _get_session_by_user_id(self, user_id):
+        return await self.session_getter.get_session_id_by_user_id(user_id)
 
 
     async def auth_by_name_and_psw(self, name, psw):

@@ -9,10 +9,10 @@ class SignUpHandler:
         self.user_reader = user_reader
 
 
-    def sign_up(self, params):
+    async def sign_up(self, params):
         try:
-            self.user_registrator.create_user(params.name, params.password)
-            user = self.user_reader.get_by_kwargs(name = params.name)
+            await self.user_registrator.create_user(params.name, params.password)
+            user = await self.user_reader.get_by_kwargs(name = params.name)
             self.create_user_storage(user.storage_id)
         except UserAlreadyExists:
             raise APIUserAlreadyExists(params.name)

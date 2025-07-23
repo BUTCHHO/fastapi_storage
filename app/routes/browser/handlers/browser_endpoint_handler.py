@@ -25,6 +25,7 @@ class BrowserEndpointHandler:
         try:
             if path_in_storage is None:
                 path_in_storage = ''
+            self.path_ensurer.ensure_path_safety(storage_id, path_in_storage)
             path_in_storage_with_id = self.path_joiner.join_paths(storage_id, path_in_storage)
             entitynames = self._get_all_entitynames_in_dir(path_in_storage_with_id)
             return entitynames
@@ -32,13 +33,14 @@ class BrowserEndpointHandler:
             raise APIEntityDoesNotExists(path_in_storage)
         except PathGoesBeyondLimits:
             raise APIPathGoesBeyondLimits(path_in_storage)
-
+        except Exception as e:
+            self.logger.log(e)
 
     def _recursively_get_entities_by_pattern(self, pattern:str, searching_in):
         entities = self.storage_reader.find_entities_path(searching_in, pattern)
         return entities
 
-    def search_entities_by_pattern(self, storage_id: str, pattern: str, searching_in: str):
+    async def search_entities_by_pattern(self, storage_id: str, pattern: str, searching_in: str):
         try:
             pattern = f'{pattern}*'
             if searching_in is None:
@@ -47,6 +49,7 @@ class BrowserEndpointHandler:
             searching_in_path_with_id = self.path_joiner.join_paths(storage_id, searching_in)
             entities = self._recursively_get_entities_by_pattern(pattern, searching_in_path_with_id)
             return entities
+        except PathGoesBeyondLimits:
+            raise APIEntityDoesNotExists(searching_in)
         except Exception as e:
-            if isinstance(e, HTTPException): raise
             self.logger.log(e)

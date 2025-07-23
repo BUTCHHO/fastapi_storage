@@ -1,5 +1,10 @@
 from fastapi import HTTPException
 
+class APIEntityIsNotADir(HTTPException):
+    def __init__(self, path_in_storage, status_code=400):
+        detail = {'message': f'entity at {path_in_storage} is not a directory', 'code':'entity_is_not_a_dir'}
+        super().__init__(status_code, detail)
+
 class APIPathGoesBeyondLimits(HTTPException):
     def __init__(self, path_in_storage, detail=None, status_code=403):
         if not detail:

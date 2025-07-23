@@ -11,8 +11,8 @@ class UserGetter:
     async def _get_user_from_db(self, user_id):
         return await self.user_reader.get_by_kwargs(id=user_id)
 
-    async def _get_session_from_db(self, id):
-        return await self.session_reader.get_by_id(id)
+    async def _get_session_from_db(self, session_id):
+        return await self.session_reader.get_by_id(id=session_id)
 
     async def _get_user_if_session_not_in_cache(self, session_id):
         session = await self._get_session_from_db(session_id)

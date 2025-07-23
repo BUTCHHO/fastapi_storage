@@ -19,4 +19,4 @@ def make_dir_in_storage(user=Depends(auth_depend.auth), params: MakeDirInStorage
 @storage_acting_router.delete('/delete-entity-in-storage')
 def delete_entity(user=Depends(auth_depend.auth), params: DeleteEntityQuery = Query()):
     auth_depend.ask_for_password(params.password, user)
-    delete_entity_handler.delete_entity(str(user.id), params.path_in_storage)
+    delete_entity_handler.delete_entity(str(user.storage_id), params.path_in_storage)

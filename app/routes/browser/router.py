@@ -33,8 +33,8 @@ def get_entities_in_storage(params: BrowserGetEntitiesQuery = Query(),
             "path_in_storage": params.path_in_storage}
 
 @browser_router.get('/_get_entities/search', response_model=SearchEntitiesResponse)
-def search_entities_by_pattern(user=Depends(auth_depend.auth), params: BrowserSearchEntitiesQuery = Query()):
-    entities = browser_endpoint_handler.search_entities_by_pattern(user.storage_id, params.pattern, params.searching_in_path)
+async def search_entities_by_pattern(user=Depends(auth_depend.auth), params: BrowserSearchEntitiesQuery = Query()):
+    entities = await browser_endpoint_handler.search_entities_by_pattern(user.storage_id, params.pattern, params.searching_in_path)
     return {"entities": entities}
 
 @browser_router.get('/browser', response_class=HTMLResponse)

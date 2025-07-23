@@ -1,5 +1,8 @@
+from path_explorator import EntityDoesNotExists, EntityIsNotADir
+
 from interfaces import IStorageWriter
-from exceptions import APIDirectoryAlreadyExists
+from exceptions import APIEntityIsNotADir, APIDirectoryAlreadyExists, APIEntityDoesNotExists
+
 
 
 class MakeDirHandler:
@@ -16,5 +19,7 @@ class MakeDirHandler:
             self.path_ensurer.ensure_path_safety(storage_id, path)
             path_with_storage_id = self.path_joiner.join_paths(storage_id, path)
             self.storage_writer.create_dir(path_with_storage_id, name)
-        except FileExistsError:
-            raise APIDirectoryAlreadyExists
+        except EntityDoesNotExists:
+            raise APIEntityDoesNotExists(path)
+        except EntityIsNotADir:
+            raise APIEntityIsNotADir(path)
