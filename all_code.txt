@@ -9,7 +9,7 @@ class APITooManyFiles(HTTPException):
         detail = {"message": 'Too many files were uploaded at once. Please try again with fewer files per upload.',
                   "code": 'too_many_files'}
         status_code = 429
-        super().__init__(detail, status_code)from .path_http_exc import APIPathGoesBeyondLimits, APIUserStorageAlreadyExists, APIDirectoryAlreadyExists, APIEntityDoesNotExists, APIUnsupportedEntityType
+        super().__init__(detail, status_code)from .path_http_exc import APIEntityIsNotADir, APIPathGoesBeyondLimits, APIUserStorageAlreadyExists, APIDirectoryAlreadyExists, APIEntityDoesNotExists, APIUnsupportedEntityType
 from .exc import NotAUserId
 from .path_exc import EntityDoesNotExists, EntityIsNotADir, PathGoesBeyondLimits
 from .auth_http_exc import APIUserAlreadyExists, APIUserDontExists, APIIncorrectPassword, APISessionDontExists, APISessionExpired, APIUnauthorized
@@ -85,6 +85,11 @@ class APIUnauthorized(HTTPException):
         super().__init__(msg)
 
 from fastapi import HTTPException
+
+class APIEntityIsNotADir(HTTPException):
+    def __init__(self, path_in_storage, status_code=400):
+        detail = {'message': f'entity at {path_in_storage} is not a directory', 'code':'entity_is_not_a_dir'}
+        super().__init__(status_code, detail)
 
 class APIPathGoesBeyondLimits(HTTPException):
     def __init__(self, path_in_storage, detail=None, status_code=403):
@@ -227,17 +232,17 @@ class AuthDepend:
     def __init__(self, auth_handler):
         self.auth_handler = auth_handler
 
-    def auth_allow_unauthorized(self, request: Request):
+    async def auth_allow_unauthorized(self, request: Request):
         try:
-            return self.auth(request)
+            return await self.auth(request)
         except APIUserDontExists:
             return None
         except APIUnauthorized:
             return None
 
-    def auth(self, request: Request):
+    async def auth(self, request: Request):
         session_id = request.cookies.get('session_id')
-        return self.auth_handler.auth_with_session_id(session_id)
+        return await self.auth_handler.auth_with_session_id(session_id)
 
     def ask_for_password(self, password, user):
         try:
@@ -330,6 +335,9 @@ class ModelActor(ParentAccess):
             session.rollback()
         finally:
             session.close()from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy.exc import IntegrityError
+from asyncpg import UniqueViolationError
+from exceptions.database_repo import FieldUniqueViolation
 
 class ParentAccess:
     def __init__(self, model, logger, engine):
@@ -344,6 +352,10 @@ class ParentAccess:
             async with self.async_session_maker() as session:
                 try:
                     return await method(self, session=session, **kwargs)
+                except IntegrityError as i_e:
+                    if 'UniqueViolationError' in i_e.orig.__str__():
+                        raise FieldUniqueViolation()
+                    raise
                 except Exception as e:
                     await session.rollback()
                     raise
@@ -363,15 +375,17 @@ class ModelReader(ParentAccess):
         result = await session.execute(statement)
         return result.scalar_one_or_none()
 
+
     @ParentAccess.async_connection
     async def get_by_id(self, session, id):
         statement = select(self.model).filter_by(id=id).limit(1)
         result = await session.execute(statement)
-        return result.scalar_or_none()
-
+        return result.scalar_one_or_none()
 from sqlalchemy import insert, delete
-
+from sqlalchemy.exc import IntegrityError
+from asyncpg.exceptions import UniqueViolationError
 from db_repository.async_access.async_parent_access import ParentAccess
+from exceptions.database_repo import FieldUniqueViolation
 
 
 class ModelActor(ParentAccess):
@@ -388,8 +402,19 @@ class ModelActor(ParentAccess):
         await session.commit()
 
     @ParentAccess.async_connection
+    async def write_record_to_db(self, session, record):
+        session.add(record)
+        await session.commit()
+
+    @ParentAccess.async_connection
     async def delete_record_by_kwargs(self, session, **kwargs):
         statement = delete(self.model).filter_by(**kwargs)
+        await session.execute(statement)
+        await session.commit()
+
+    @ParentAccess.async_connection
+    async def delete_record_by_id(self, session, id):
+        statement = delete(self.model).filter_by(id=id)
         await session.execute(statement)
         await session.commit()from sqlalchemy.orm import sessionmaker
 
@@ -616,7 +641,7 @@ class SessionDeleter:
         :return:
         """
         self.cacher.delete_data(session_id)
-        await self.session_actor.delete_record_by_id(session_id)from .session_maker import SessionMaker
+        await self.session_actor.delete_record_by_id(id=session_id)from .session_maker import SessionMaker
 from .user_getter import UserGetter
 from .registration import UserRegistration
 from .session_validator import SessionValidator
@@ -636,8 +661,8 @@ class UserGetter:
     async def _get_user_from_db(self, user_id):
         return await self.user_reader.get_by_kwargs(id=user_id)
 
-    async def _get_session_from_db(self, id):
-        return await self.session_reader.get_by_id(id)
+    async def _get_session_from_db(self, session_id):
+        return await self.session_reader.get_by_id(id=session_id)
 
     async def _get_user_if_session_not_in_cache(self, session_id):
         session = await self._get_session_from_db(session_id)
@@ -671,7 +696,6 @@ class SessionValidator:
             await self.session_deleter.delete_session(session)
             raise SessionExpired
         return True
-from exceptions.database_repo import FieldUniqueViolation
 from interfaces import IModelReader
 from .exceptions import UserDontExists, IncorrectPassword, SessionDontExists, SessionExpired
 
@@ -695,8 +719,8 @@ class UserAuthentication:
         if not self.hasher.check_password(psw, user.password):
             raise IncorrectPassword
 
-    def _get_session_by_user_id(self, user_id):
-        return self.session_getter.get_session_id_by_user_id(user_id)
+    async def _get_session_by_user_id(self, user_id):
+        return await self.session_getter.get_session_id_by_user_id(user_id)
 
 
     async def auth_by_name_and_psw(self, name, psw):
@@ -709,7 +733,7 @@ class UserAuthentication:
         except SessionDontExists or SessionExpired:
             return await self.session_maker.make_session(user.id)
 
-    def auth_by_session_id(self, session_id):
+    async def auth_by_session_id(self, session_id):
         return await self.user_getter.get_user_by_session_id(session_id)
 
 
@@ -730,16 +754,16 @@ class SessionMaker:
         hashed_id = self.hasher.create_session_id_hash()
         return hashed_id
 
-    def _create_session_obj(self, user_id):
+    async def _create_session_obj(self, user_id):
         session_id = self._create_session_id()
         expire_date = self._get_expire_date()
         session_record = self._access.create_record(id=session_id, expire_date=expire_date, user_id=user_id)
         return session_record
 
-    def make_session(self, user_id):
-        session = self._create_session_obj(user_id)
+    async def make_session(self, user_id):
+        session = await self._create_session_obj(user_id)
         session_id = session.id
-        self._access.write_record_to_db(session)
+        await self._access.write_record_to_db(record=session)
         self.cacher.put_data(session_id, user_id)
         return session_idfrom .exceptions import UserAlreadyExists
 from exceptions.database_repo import FieldUniqueViolation
@@ -750,11 +774,11 @@ class UserRegistration:
         self.hasher = hasher
         self.logger = logger
 
-    def create_user(self, name, password):
+    async def create_user(self, name, password):
         try:
             password = self.hasher.generate_psw_hash(password)
             storage_id = self.hasher.generate_hash(16)
-            self._user_actor.create_and_write_record_to_db(name=name, password=password, storage_id=storage_id)
+            await self._user_actor.create_and_write_record_to_db(name=name, password=password, storage_id=storage_id)
         except FieldUniqueViolation:
                 raise UserAlreadyExists(name)
         except Exception as e:
@@ -767,7 +791,7 @@ class UserLogout:
 
 
 
-    def logout_user(self, request, response):
+    async def logout_user(self, request, response):
         """
         :param response: something to get cookies from
         :param request: something to put/delete cookies from
@@ -778,7 +802,7 @@ class UserLogout:
         if session_id is None:
             return
         response.delete_cookie('session_id')
-        self.session_deleter.delete_session(session_id)class UserAlreadyExists(Exception):
+        await self.session_deleter.delete_session(session_id)class UserAlreadyExists(Exception):
     def __init__(self, name):
         msg = f'User with name {name} already exists'
         super().__init__(msg)
@@ -830,6 +854,7 @@ class BrowserEndpointHandler:
         try:
             if path_in_storage is None:
                 path_in_storage = ''
+            self.path_ensurer.ensure_path_safety(storage_id, path_in_storage)
             path_in_storage_with_id = self.path_joiner.join_paths(storage_id, path_in_storage)
             entitynames = self._get_all_entitynames_in_dir(path_in_storage_with_id)
             return entitynames
@@ -837,13 +862,14 @@ class BrowserEndpointHandler:
             raise APIEntityDoesNotExists(path_in_storage)
         except PathGoesBeyondLimits:
             raise APIPathGoesBeyondLimits(path_in_storage)
-
+        except Exception as e:
+            self.logger.log(e)
 
     def _recursively_get_entities_by_pattern(self, pattern:str, searching_in):
         entities = self.storage_reader.find_entities_path(searching_in, pattern)
         return entities
 
-    def search_entities_by_pattern(self, storage_id: str, pattern: str, searching_in: str):
+    async def search_entities_by_pattern(self, storage_id: str, pattern: str, searching_in: str):
         try:
             pattern = f'{pattern}*'
             if searching_in is None:
@@ -852,8 +878,9 @@ class BrowserEndpointHandler:
             searching_in_path_with_id = self.path_joiner.join_paths(storage_id, searching_in)
             entities = self._recursively_get_entities_by_pattern(pattern, searching_in_path_with_id)
             return entities
+        except PathGoesBeyondLimits:
+            raise APIEntityDoesNotExists(searching_in)
         except Exception as e:
-            if isinstance(e, HTTPException): raise
             self.logger.log(e)from fastapi.templating import Jinja2Templates
 
 class BrowserViewHandler:
@@ -898,8 +925,8 @@ def get_entities_in_storage(params: BrowserGetEntitiesQuery = Query(),
             "path_in_storage": params.path_in_storage}
 
 @browser_router.get('/_get_entities/search', response_model=SearchEntitiesResponse)
-def search_entities_by_pattern(user=Depends(auth_depend.auth), params: BrowserSearchEntitiesQuery = Query()):
-    entities = browser_endpoint_handler.search_entities_by_pattern(user.storage_id, params.pattern, params.searching_in_path)
+async def search_entities_by_pattern(user=Depends(auth_depend.auth), params: BrowserSearchEntitiesQuery = Query()):
+    entities = await browser_endpoint_handler.search_entities_by_pattern(user.storage_id, params.pattern, params.searching_in_path)
     return {"entities": entities}
 
 @browser_router.get('/browser', response_class=HTMLResponse)
@@ -1023,7 +1050,7 @@ def make_dir_in_storage(user=Depends(auth_depend.auth), params: MakeDirInStorage
 @storage_acting_router.delete('/delete-entity-in-storage')
 def delete_entity(user=Depends(auth_depend.auth), params: DeleteEntityQuery = Query()):
     auth_depend.ask_for_password(params.password, user)
-    delete_entity_handler.delete_entity(str(user.id), params.path_in_storage)
+    delete_entity_handler.delete_entity(str(user.storage_id), params.path_in_storage)
 from pydantic import BaseModel, Field
 
 
@@ -1034,8 +1061,11 @@ class MakeDirInStorageQuery(BaseModel):
 class DeleteEntityQuery(BaseModel):
     password: str
     path_in_storage: str
+from path_explorator import EntityDoesNotExists, EntityIsNotADir
+
 from interfaces import IStorageWriter
-from exceptions import APIDirectoryAlreadyExists
+from exceptions import APIEntityIsNotADir, APIDirectoryAlreadyExists, APIEntityDoesNotExists
+
 
 
 class MakeDirHandler:
@@ -1052,10 +1082,12 @@ class MakeDirHandler:
             self.path_ensurer.ensure_path_safety(storage_id, path)
             path_with_storage_id = self.path_joiner.join_paths(storage_id, path)
             self.storage_writer.create_dir(path_with_storage_id, name)
-        except FileExistsError:
-            raise APIDirectoryAlreadyExistsfrom .make_dir_handler import MakeDirHandler
+        except EntityDoesNotExists:
+            raise APIEntityDoesNotExists(path)
+        except EntityIsNotADir:
+            raise APIEntityIsNotADir(path)from .make_dir_handler import MakeDirHandler
 from .delete_dir_handler import DeleteEntityHandlerfrom interfaces import IStorageWriter
-from exceptions import EntityDoesNotExists, APIEntityDoesNotExists
+from exceptions import EntityDoesNotExists, PathGoesBeyondLimits, APIPathGoesBeyondLimits, APIEntityDoesNotExists
 
 
 class DeleteEntityHandler:
@@ -1065,13 +1097,15 @@ class DeleteEntityHandler:
         self.path_joiner = path_joiner
         self.logger = logger
 
-    def delete_entity(self, user_id, path_in_storage):
+    def delete_entity(self, storage_id, path_in_storage):
         try:
             if path_in_storage is None:
                 path_in_storage = ''
-            path_with_user_id = self.path_joiner.join_paths(user_id, path_in_storage)
-            self.path_ensurer.ensure_path_safety(user_id, path_in_storage)
+            path_with_user_id = self.path_joiner.join_paths(storage_id, path_in_storage)
+            self.path_ensurer.ensure_path_safety(storage_id, path_in_storage)
             self.storage_writer.delete_entity(path_with_user_id)
+        except PathGoesBeyondLimits:
+            raise APIPathGoesBeyondLimits(path_in_storage)
         except EntityDoesNotExists:
             raise APIEntityDoesNotExists(path_in_storage)
         except Exception as e:
@@ -1090,13 +1124,13 @@ auth_handler = AuthHandler(user_authenticator)
 
 
 @auth_router.get('/_logout', name='auth-logout')
-def log_out_endpoint(request: Request, response: Response):
-    logout_handler.logout_user(request, response)
+async def log_out_endpoint(request: Request, response: Response):
+    await logout_handler.logout_user(request, response)
 
 
 @auth_router.post('/_sign-up', name='auth-sign_up')
-def sign_up_endpoint(params: SignUpQuery = Query()):
-    sign_up_handler.sign_up(params)
+async def sign_up_endpoint(params: SignUpQuery = Query()):
+    await sign_up_handler.sign_up(params)
     return {"message": 'successfully signed up'}
 
 @auth_router.post('/_log-in', name='auth-login')
@@ -1150,8 +1184,6 @@ class AuthHandler:
 
     async def auth_with_psw_and_set_session_cookie(self, name, password, response: Response, request: Request):
         try:
-            if request.cookies.get('session_id'):
-                return
             session_id = await self.authenticator.auth_by_name_and_psw(name, password)
             self.set_session_id_cookie(session_id, response)
         except IncorrectPassword:
@@ -1184,9 +1216,9 @@ class LogOutHandler:
         self.logouter = user_logouter
         self.logger = logger
 
-    def logout_user(self, request: Request, response: Response):
+    async def logout_user(self, request: Request, response: Response):
         try:
-            self.logouter.logout_user(request, response)
+            await self.logouter.logout_user(request, response)
         except FieldUniqueViolation:
             return
         except Exception as e:
@@ -1202,10 +1234,10 @@ class SignUpHandler:
         self.user_reader = user_reader
 
 
-    def sign_up(self, params):
+    async def sign_up(self, params):
         try:
-            self.user_registrator.create_user(params.name, params.password)
-            user = self.user_reader.get_by_kwargs(name = params.name)
+            await self.user_registrator.create_user(params.name, params.password)
+            user = await self.user_reader.get_by_kwargs(name = params.name)
             self.create_user_storage(user.storage_id)
         except UserAlreadyExists:
             raise APIUserAlreadyExists(params.name)
@@ -1376,6 +1408,8 @@ from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
 from .routes import download_router, settings_router, auth_router, upload_router ,storage_acting_router ,browser_router
+from alchemy.models import Base
+from alchemy.async_engine import async_engine
 
 browser_static_dir = Path(__file__).parent / 'routes/browser/static'
 global_static_dir = Path(__file__).parent / 'static'
@@ -1385,6 +1419,12 @@ global_static = StaticFiles(directory=global_static_dir)
 
 
 app = FastAPI()
+
+
+@app.on_event('startup')
+async def create_tables():
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
 app.mount('/browser/static', browser_static, 'browser_static')
 app.mount('/static', global_static, 'static')
@@ -1505,6 +1545,7 @@ class Logger:
         self.logger = SiteLogger
 
     def log(self, exception):
+        raise
         print(f'{self.red_log}{exception}{self.red_log}')
 
     def decor_log(self, func):
@@ -1601,12 +1642,13 @@ class PathValidEnsurer:
             raise EntityDoesNotExists(path)
 
     def ensure_path_safety(self, storage_id: int, path_in_storage: str):
-        try:
-            abs_requesting_path = self.path_joiner.create_absolute_entity_path(storage_id, path_in_storage)
-            abs_limiting_path = self.path_joiner.create_absolute_user_dir_path(storage_id)
-            self.raise_if_goes_beyond_limits(abs_limiting_path, abs_requesting_path)
-        except PathGoesBeyondLimits:
-            raise APIPathGoesBeyondLimits(path_in_storage)
+        """
+        :raises: PathGoesBeyondLimits
+        """
+        abs_requesting_path = self.path_joiner.create_absolute_entity_path(storage_id, path_in_storage)
+        abs_limiting_path = self.path_joiner.create_absolute_user_dir_path(storage_id)
+        self.raise_if_goes_beyond_limits(abs_limiting_path, abs_requesting_path)
+
 
 
 from sqlalchemy import create_engine
@@ -1615,8 +1657,6 @@ from config import DATABASE_URL
 
 engine = create_engine(DATABASE_URL)from .models import User, Sessionfrom sqlalchemy import Column, Integer, String, Boolean, Date, ForeignKey
 from sqlalchemy.orm import declarative_base
-from asyncio import run
-from .async_engine import async_engine
 
 Base = declarative_base()
 
@@ -1636,15 +1676,10 @@ class Session(Base):
 
     id = Column(String(50), primary_key=True)
     user_id = Column(Integer, ForeignKey(User.id), unique=True)
-    expire_date = Column(Date)
+    expire_date = Column(Date)from sqlalchemy.ext.asyncio import create_async_engine
+from config import DATABASE_URL
 
-async def create_tables():
-    async with async_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-run(create_tables())from sqlalchemy.ext.asyncio import create_async_engine
-
-async_engine = create_async_engine('postgresql+asyncpg://butcho:56745321@localhost:5432/cloud_storage', pool_pre_ping=True)from pathlib import Path
+async_engine = create_async_engine(DATABASE_URL, pool_pre_ping=True)from pathlib import Path
 from exceptions import EntityDoesNotExists, EntityIsNotADir
 
 
@@ -1797,6 +1832,9 @@ from .storage_deleter import StorageDeleterimport shutil
 
 from aiofiles import open as aio_open
 from pathlib import Path
+
+from path_explorator import EntityIsNotADir
+
 from exceptions.path_exc import EntityDoesNotExists
 
 
@@ -1808,6 +1846,7 @@ class StorageWriter:
 
     def delete_entity(self, path: str | None):
         entity = Path(self.root_dir, path)
+        print(entity,' HERE IS ENTITY YOU SEE ')
         if entity.exists():
             if entity.is_dir():
                 shutil.rmtree(entity)
@@ -1834,6 +1873,10 @@ class StorageWriter:
         if not isinstance(name, str):
             raise TypeError(f'name argument must be str, not {type(path)}')
         root_dir = Path(self.root_dir, path, name)
+        if not root_dir.exists():
+            raise EntityDoesNotExists(path)
+        if not root_dir.is_dir():
+            raise EntityIsNotADir(path)
         root_dir.mkdir(exist_ok=exist_ok)
 
     def create_file(self, path: str | None , name: str, exist_ok):

@@ -43,10 +43,6 @@ class StorageWriter:
         if not isinstance(name, str):
             raise TypeError(f'name argument must be str, not {type(path)}')
         root_dir = Path(self.root_dir, path, name)
-        if not root_dir.exists():
-            raise EntityDoesNotExists
-        if not root_dir.is_dir():
-            raise EntityIsNotADir
         root_dir.mkdir(exist_ok=exist_ok)
 
     def create_file(self, path: str | None , name: str, exist_ok):
