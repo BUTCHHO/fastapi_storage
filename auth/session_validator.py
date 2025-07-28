@@ -12,6 +12,7 @@ class SessionValidator:
         return True
 
     async def validate_session_or_raise(self, session):
+        print(session.id, session.expire_date, session.user_id)
         if self.is_session_expired(session.expire_date):
             await self.session_deleter.delete_session(session)
             raise SessionExpired

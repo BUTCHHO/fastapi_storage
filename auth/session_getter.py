@@ -16,4 +16,4 @@ class SessionGetter:
         if session is None:
             raise SessionDontExists
         await self.session_validator.validate_session_or_raise(session)
-        return session
+        return session.id

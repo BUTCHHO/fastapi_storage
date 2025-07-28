@@ -9,7 +9,11 @@ from cache_handler import RedisCacher
 from alchemy import User, Session
 from alchemy.async_engine import async_engine
 
-from config import STORAGE_PATH, CACHE_EXPIRE_TIME, CACHE_HOST, CACHE_PORT, SESSION_EXPIRE_TIME
+from config import STORAGE_PATH, CACHE_EXPIRE_TIME, SESSION_EXPIRE_TIME
+from .main import app_manager
+
+CACHE_HOST = app_manager.config['CACHE_HOST']
+CACHE_PORT = app_manager.config['CACHE_HOST']
 
 logger = Logger()
 redis_client = Redis(host=CACHE_HOST, port=CACHE_PORT, decode_responses=True)
