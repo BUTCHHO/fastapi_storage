@@ -11,7 +11,6 @@ from cache_handler.redis_client import init_redis_client, get_cache_client
 
 class ApplicationManager:
     def __init__(self):
-
         self.config = {'DATABASE_URL': config.DATABASE_URL,
                        'CACHE_PORT':config.CACHE_PORT,
                        'CACHE_HOST': config.CACHE_HOST}
