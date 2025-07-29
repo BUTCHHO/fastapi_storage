@@ -7,7 +7,7 @@ import config
 from .routes import download_router, settings_router, auth_router, upload_router ,storage_acting_router ,browser_router
 from alchemy.models import Base
 from alchemy.async_engine import init_async_engine, get_async_engine
-
+from cache_handler.redis_client import init_redis_client, get_cache_client
 
 class ApplicationManager:
     def __init__(self):
@@ -15,9 +15,10 @@ class ApplicationManager:
         self.config = {'DATABASE_URL': config.DATABASE_URL,
                        'CACHE_PORT':config.CACHE_PORT,
                        'CACHE_HOST': config.CACHE_HOST}
+        init_redis_client(self.config['CACHE_HOST'], self.config['CACHE_PORT'])
         init_async_engine(self.config['DATABASE_URL'])
         self.database_engine = get_async_engine()
-        self.redis_client =
+        self.cache_client = get_cache_client()
         self.app = FastAPI(lifespan=self.lifespan)
 
         self.browser_static_dir = Path(__file__).parent / 'routes/browser/static'
@@ -50,6 +51,7 @@ class ApplicationManager:
     def configure_app_for_tests(self, test_database_url, test_cache_url):
         init_async_engine(test_database_url)
         self.database_engine = get_async_engine()
+
 
 
 
