@@ -1,10 +1,13 @@
-from http.client import responses
-
-from fastapi import UploadFile
 from fastapi.testclient import TestClient
 
+from config import reconfigure_values_for_tests
+reconfigure_values_for_tests()
 
-from main import app
+from config import DATABASE_URL
+print('\n', DATABASE_URL, 'HERE IS DATABASE')
+
+from app.main import app
+
 client = TestClient(app)
 
 def test_sign_in():
