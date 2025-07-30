@@ -15,14 +15,13 @@ browser_static = StaticFiles(directory=browser_static_dir)
 global_static = StaticFiles(directory=global_static_dir)
 
 
-app = FastAPI()
-
-
 @asynccontextmanager
 async def lifespan(fastapi_app: FastAPI):
     async with async_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield
+
+app = FastAPI(lifespan=lifespan)
 
 app.mount('/browser/static', browser_static, 'browser_static')
 app.mount('/static', global_static, 'static')
