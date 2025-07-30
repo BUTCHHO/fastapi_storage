@@ -121,13 +121,16 @@ class APIDirectoryAlreadyExists(HTTPException):
         detail = {"message": f'Directory at {path} already exists', "code":'diractory_already_exists'}
         super().__init__(status_code, detail)
 
-from path_explorator.exceptions import EntityDoesNotExists, EntityIsNotADir, PathGoesBeyondLimitsfrom http.client import responses
+from path_explorator.exceptions import EntityDoesNotExists, EntityIsNotADir, PathGoesBeyondLimitsfrom fastapi.testclient import TestClient
 
-from fastapi import UploadFile
-from fastapi.testclient import TestClient
+from config import reconfigure_values_for_tests
+reconfigure_values_for_tests()
 
+from config import DATABASE_URL
+print('\n', DATABASE_URL, 'HERE IS DATABASE')
 
-from main import app
+from app.main import app
+
 client = TestClient(app)
 
 def test_sign_in():
@@ -170,58 +173,7 @@ def test_download_file():
     assert content_len > 0
 
 def test_upload_entity():
-    print('not_impl')from unittest import TestCase
-from unittest.mock import patch
-
-
-class TestPathValidEnsurer(TestCase):
-    def setUp(self):
-        pass
-
-
-    def test_raise_if_goes_beyond_limits(self):from logic import Archivator
-from config import STORAGE_PATH
-
-archiver = Archivator()
-
-def test_create_large_zip():
-    path_to_archivable = f"{STORAGE_PATH}/music"
-    zip = archiver.create_large_zip(path_to_archivable)
-    zip_name = zip.name
-    expected_zip_name = 'music.zip'
-    assert zip_name == expected_zip_name
-    archiver.cleanup_temp_files()
-
-from unittest import TestCase
-from unittest.mock import patch, MagicMock
-from utils import PathJoiner
-
-
-class TestPathCreator(TestCase):
-    def setUp(self):
-        self.root = '/root/path'
-        self.path_joiner = PathJoiner(self.root)
-
-    def test_join_paths(self):
-        first_part = 'directory/dir/'
-        second_part = 'path/to/dir'
-        result = self.path_joiner.join_paths(first_part, second_part)
-        expected_result = f'{first_part}{second_part}'
-        self.assertEqual(result, expected_result)
-
-    def test_join_with_root_path(self):
-        path = 'path/to/dir'
-        expected = f'{self.root}/{path}'
-        result = self.path_joiner.join_with_root_path(path)
-        self.assertEqual(result, expected)
-
-    def test_create_absolute_entity_path(self):
-        storage_id = 'rerer'
-        path_in_storage = 'path/to/dir'
-        expected = f'{self.root}/{storage_id}/{path_in_storage}'
-        result = self.path_joiner.create_absolute_entity_path(storage_id, path_in_storage)
-        self.assertEqual(result, expected)
-from .auth import AuthDependfrom fastapi import Request
+    print('not_impl')from .auth import AuthDependfrom fastapi import Request
 
 from exceptions import APIUserDontExists
 from exceptions.auth_http_exc import APIIncorrectPassword
@@ -256,6 +208,8 @@ from os import getenv
 
 load_dotenv('.env')
 
+
+
 STORAGE_PATH = getenv('STORAGE_PATH')
 DATABASE_URL = getenv('DATABASE_URL')
 SESSION_EXPIRE_TIME = getenv('SESSION_EXPIRE_TIME_DAYS')
@@ -264,15 +218,23 @@ CACHE_HOST = getenv('CACHE_HOST')
 CACHE_PORT = int(getenv('CACHE_PORT'))
 CACHE_EXPIRE_TIME = getenv('CACHE_EXPIRE_TIME_SECONDS')
 
+def reconfigure_values_for_tests():
+    global STORAGE_PATH
+    global DATABASE_URL
+    STORAGE_PATH = getenv('TEST_STORAGE_PATH')
+    DATABASE_URL = getenv('TEST_DATABASE_URL')
+    assert_not_none()
 
-assert STORAGE_PATH is not None
-assert DATABASE_URL is not None
-assert SESSION_EXPIRE_TIME is not None
-assert SESSION_COOKIES_EXPIRE_TIME is not None
-assert CACHE_PORT is not None
-assert CACHE_HOST is not None
-assert CACHE_EXPIRE_TIME is not None
-from .async_access.reader import ModelReader
+def assert_not_none():
+    assert STORAGE_PATH is not None
+    assert DATABASE_URL is not None
+    assert SESSION_EXPIRE_TIME is not None
+    assert SESSION_COOKIES_EXPIRE_TIME is not None
+    assert CACHE_PORT is not None
+    assert CACHE_HOST is not None
+    assert CACHE_EXPIRE_TIME is not None
+
+assert_not_none()from .async_access.reader import ModelReader
 from .async_access.async_actor import ModelActorfrom sqlalchemy.exc import IntegrityError
 from psycopg2.errors import UniqueViolation
 from exceptions.database_repo import FieldUniqueViolation
@@ -1407,6 +1369,8 @@ user_deleter = UserDeleter(user_actor)from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
+from contextlib import asynccontextmanager
+
 from .routes import download_router, settings_router, auth_router, upload_router ,storage_acting_router ,browser_router
 from alchemy.models import Base
 from alchemy.async_engine import async_engine
@@ -1418,13 +1382,13 @@ browser_static = StaticFiles(directory=browser_static_dir)
 global_static = StaticFiles(directory=global_static_dir)
 
 
-app = FastAPI()
-
-
-@app.on_event('startup')
-async def create_tables():
+@asynccontextmanager
+async def lifespan(fastapi_app: FastAPI):
     async with async_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    yield
+
+app = FastAPI(lifespan=lifespan)
 
 app.mount('/browser/static', browser_static, 'browser_static')
 app.mount('/static', global_static, 'static')
@@ -1679,7 +1643,8 @@ class Session(Base):
     expire_date = Column(Date)from sqlalchemy.ext.asyncio import create_async_engine
 from config import DATABASE_URL
 
-async_engine = create_async_engine(DATABASE_URL, pool_pre_ping=True)from pathlib import Path
+async_engine = create_async_engine(DATABASE_URL, pool_pre_ping=True)
+print(DATABASE_URL)from pathlib import Path
 from exceptions import EntityDoesNotExists, EntityIsNotADir
 
 

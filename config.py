@@ -16,8 +16,10 @@ CACHE_EXPIRE_TIME = getenv('CACHE_EXPIRE_TIME_SECONDS')
 def reconfigure_values_for_tests():
     global STORAGE_PATH
     global DATABASE_URL
+    global CACHE_PORT
     STORAGE_PATH = getenv('TEST_STORAGE_PATH')
     DATABASE_URL = getenv('TEST_DATABASE_URL')
+    CACHE_PORT = getenv('TEST_CACHE_PORT')
     assert_not_none()
 
 def assert_not_none():
