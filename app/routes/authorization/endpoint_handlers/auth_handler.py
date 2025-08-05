@@ -4,7 +4,7 @@ from auth.authentication import Authenticator
 
 from exceptions import APIIncorrectPassword, APIUserDontExists, \
     APISessionDontExists, APISessionExpired, APIUnauthorized
-from auth.exceptions import SessionDontExists, UserDontExists, IncorrectPassword, SessionExpired
+from auth.exceptions import IncorrectPassword, UserDontExists, SessionDontExists, SessionExpired
 from config import SESSION_COOKIES_EXPIRE_TIME
 
 class AuthHandler:

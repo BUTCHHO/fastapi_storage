@@ -13,7 +13,7 @@ class Authenticator:
         return await self.user_getter.get_by_session_id(session_id)
 
     def check_password(self, psw, original_psw):
-        return self.hasher.compare_password_hashes(psw, original_psw)
+        return self.hasher.check_password(psw, original_psw)
 
     async def auth_by_name_and_psw_and_return_session_id(self, name, psw):
         user = await self.user_getter.get_by_name(name)
