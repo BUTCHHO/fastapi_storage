@@ -12,7 +12,7 @@ class ParentAccess:
 
     @staticmethod
     def async_connection(method):
-        async def wrapper(self, *args, **kwargs):
+        async def wrapper(self, **kwargs):
             async with self.async_session_maker() as session:
                 try:
                     return await method(self, session=session, **kwargs)

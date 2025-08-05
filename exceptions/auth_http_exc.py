@@ -14,7 +14,7 @@ class APIUserDontExists(HTTPException):
         super().__init__(status_code, detail)
 
 class APIIncorrectPassword(HTTPException):
-    def __init__(self, detail=None, status_code=401):
+    def __init__(self, detail=None, status_code=403):
         if not detail:
             detail = {"message": f'Incorrect password', "code": 'incorrect_password'}
         super().__init__(status_code, detail)

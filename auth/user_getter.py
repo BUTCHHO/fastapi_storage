@@ -1,4 +1,4 @@
-from .exceptions import UserDontExists, SessionDontExists, SesssionExpired
+from .exceptions import UserDontExists, SessionDontExists, SessionExpired
 
 
 class UserGetter:
@@ -12,9 +12,9 @@ class UserGetter:
         user_id = self.cacher.get_data(session_id)
         if user_id is not None:
             return self.get_user_if_in_cache(user_id)
-        session = self.session_reader.get_by_kwargs(id=session_id)
+        session = await self.session_reader.get_by_kwargs(id=session_id)
         await self._raise_and_delete_session_if_invalid(session)
-        user = await self.user_reader.get_by_kwargs(session_id=session_id)
+        user = await self.user_reader.get_by_kwargs(id=session.user_id)
         if not user:
             raise UserDontExists(user_id)
         return user
@@ -31,7 +31,7 @@ class UserGetter:
         if not self.time_handler.is_date_future(session.expire_date):
             self.cacher.delete_data(session.id)
             await self.session_reader.delete_by_kwargs(id=session.id)
-            raise SesssionExpired(session.id)
+            raise SessionExpired(session.id)
 
     async def get_by_name(self, name):
         user = await self.user_reader.get_by_kwargs(name=name)

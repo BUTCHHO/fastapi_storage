@@ -1,27 +1,29 @@
 from fastapi import Response, Request
 
+from auth.authentication import Authenticator
+
 from exceptions import APIIncorrectPassword, APIUserDontExists, \
     APISessionDontExists, APISessionExpired, APIUnauthorized
-from auth.exceptions import SessionExpired, SessionDontExists, IncorrectPassword, UserDontExists
+from auth.exceptions import SessionDontExists, UserDontExists, IncorrectPassword, SessionExpired
 from config import SESSION_COOKIES_EXPIRE_TIME
 
 class AuthHandler:
     def __init__(self, authenticator):
-        self.authenticator = authenticator
+        self.authenticator: Authenticator = authenticator
 
     def set_session_id_cookie(self, session_id, response: Response):
         response.set_cookie(key="session_id", value=session_id, max_age=SESSION_COOKIES_EXPIRE_TIME,
                             samesite='lax', httponly=True)
 
     def check_password(self, password, user):
-        self.authenticator.validate_user_and_password('', user, password)
+        self.authenticator.check_password(password, user.password)
 
     async def auth_with_psw_and_set_session_cookie(self, name, password, response: Response, request: Request):
         try:
-            session_id = await self.authenticator.auth_by_name_and_psw(name, password)
+            session_id = await self.authenticator.auth_by_name_and_psw_and_return_session_id(name, password)
             self.set_session_id_cookie(session_id, response)
         except IncorrectPassword:
-            raise APIIncorrectPassword(password)
+            raise APIIncorrectPassword()
         except UserDontExists:
             raise APIUserDontExists(name)
 

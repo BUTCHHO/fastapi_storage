@@ -1,4 +1,4 @@
-from .exceptions import InvalidPassword, UserDontExists
+from .exceptions import IncorrectPassword, UserDontExists
 
 
 class Authenticator:
@@ -12,12 +12,14 @@ class Authenticator:
     async def auth_by_session_id(self, session_id):
         return await self.user_getter.get_by_session_id(session_id)
 
+    def check_password(self, psw, original_psw):
+        return self.hasher.compare_password_hashes(psw, original_psw)
 
-    async def auth_by_name_and_psw_and_return_session(self, name, psw):
+    async def auth_by_name_and_psw_and_return_session_id(self, name, psw):
         user = await self.user_getter.get_by_name(name)
         if user is None:
             raise UserDontExists
-        if not self.hasher.compare_password_hashes(psw, user.password):
-            raise InvalidPassword
-        session = await self.session_maker.make_session_and_save(user.id)
-        return session
+        if not self.hasher.check_password(psw, user.password):
+            raise IncorrectPassword
+        session_id = await self.session_maker.make_session_and_save(user.id)
+        return session_id

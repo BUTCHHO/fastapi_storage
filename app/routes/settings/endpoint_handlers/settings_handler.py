@@ -14,7 +14,7 @@ class SettingsHandler:
 
     def delete_account(self, user_id, should_delete, request, response):
         try:
-            self.logouter.logout_user(request=request, response=response)
+            self.logouter.logout_user(user_id=user_id, response=response)
             self.account_deleter.delete_user_by_id(user_id)
             if should_delete:
                 self.delete_storage(user_id)

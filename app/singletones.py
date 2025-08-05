@@ -1,10 +1,14 @@
 from redis import Redis
 
-from auth.user_deleter import UserDeleter
+# from auth.user_deleter import UserDeleter not impl
 from utils import Logger, TimeHandler, PathCutter, PathJoiner, PathValidEnsurer, Hasher
 from logic import StorageReader, StorageWriter, Archivator, StorageDeleter
 from db_repository import ModelReader, ModelActor
-from auth import UserRegistration, SessionGetter, UserLogout, UserAuthentication ,SessionValidator, SessionMaker, SessionDeleter, UserGetter
+from auth.registration import Registrator
+from auth.authentication import Authenticator
+from auth.logouter import Logouter
+from auth.session_maker import SessionMaker
+from auth.user_getter import UserGetter
 from cache_handler import RedisCacher
 from alchemy import User, Session
 from alchemy.async_engine import async_engine
@@ -27,12 +31,9 @@ user_reader = ModelReader(User, logger, async_engine)
 user_actor = ModelActor(User, logger, async_engine)
 session_reader = ModelReader(Session, logger, async_engine)
 session_actor = ModelActor(Session, logger, async_engine)
-session_deleter = SessionDeleter(redis_cacher, session_actor, session_reader)
-session_validator = SessionValidator(time_handler, session_deleter)
-session_maker = SessionMaker(int(SESSION_EXPIRE_TIME), session_actor, time_handler, hasher, redis_cacher)
-session_getter = SessionGetter(session_reader, redis_cacher, session_validator, session_deleter)
-user_getter = UserGetter(user_reader, session_reader, redis_cacher, session_validator)
-user_registrator = UserRegistration(user_actor, hasher, logger)
-user_authenticator = UserAuthentication(user_reader, session_getter, session_maker, user_getter, logger, hasher)
-user_logouter = UserLogout(session_deleter)
-user_deleter = UserDeleter(user_actor)
+session_maker = SessionMaker(session_reader, session_actor, time_handler, hasher, redis_cacher, int(SESSION_EXPIRE_TIME))
+user_getter = UserGetter(user_reader, session_reader, redis_cacher, time_handler)
+user_registrator = Registrator(user_actor, user_reader, hasher)
+user_authenticator = Authenticator(user_getter, hasher, session_maker, session_reader, redis_cacher)
+user_logouter = Logouter(user_reader, session_reader, session_actor, redis_cacher)
+# user_deleter = UserDeleter(user_actor) not impl

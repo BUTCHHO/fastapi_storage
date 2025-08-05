@@ -9,7 +9,7 @@ class Hasher:
     def check_password(self, password, hashed_psw):
         return check_password_hash(hashed_psw, password)
 
-    def create_session_id_hash(self):
+    def generate_session_id_hash(self):
         return token_urlsafe(32)
 
     def generate_hash(self, nbytes):

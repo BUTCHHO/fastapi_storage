@@ -8,7 +8,7 @@ class UserDontExists(Exception):
         msg = f'User with id {id} dont exists'
         super().__init__(msg)
 
-class InvalidPassword(Exception):
+class IncorrectPassword(Exception):
     def __init__(self, password=None):
         msg = f'Wrong password {password}'
         super().__init__(msg)
@@ -23,7 +23,7 @@ class SessionDontExists(Exception):
         msg = f'Session for user {user_id} dont exists'
         super().__init__(msg)
 
-class SesssionExpired(Exception):
+class SessionExpired(Exception):
     def __init__(self, ses_id=None):
         msg = f'Session {ses_id} dont exists'
         super().__init__(msg)

@@ -1,20 +1,18 @@
-from fastapi import APIRouter, Request, Response, Query
+from fastapi import APIRouter, Request, Response, Query, Depends
 from .endpoint_handlers import SignUpHandler, LogOutHandler, AuthHandler
-from app.singletones import user_logouter, logger, user_reader, storage_writer, user_registrator, user_authenticator
+from app.singletones import user_logouter, logger, user_actor, hasher, user_reader, storage_writer, user_registrator, user_authenticator
 from .schemas.query import AuthenticateQuery, SignUpQuery
-
 
 auth_router = APIRouter()
 
 
 logout_handler = LogOutHandler(user_logouter, logger)
-sign_up_handler = SignUpHandler(user_registrator, storage_writer, user_reader)
+sign_up_handler = SignUpHandler(user_registrator, storage_writer, user_reader, user_actor, hasher)
 auth_handler = AuthHandler(user_authenticator)
 
-
 @auth_router.get('/_logout', name='auth-logout')
-async def log_out_endpoint(request: Request, response: Response):
-    await logout_handler.logout_user(request, response)
+async def log_out_endpoint(response: Response, request: Request):
+    await logout_handler.logout_user(request=request, response=response)
 
 
 @auth_router.post('/_sign-up', name='auth-sign_up')

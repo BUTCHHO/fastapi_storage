@@ -17,3 +17,7 @@ class Logouter:
             raise SessionDontExists
         await self.session_actor.delete_record_by_kwargs(id=session.id)
         self.cacher.delete_data(session.id)
+
+    async def delete_session(self, session_id):
+        await self.session_actor.delete_record_by_kwargs(id=session_id)
+        self.cacher.delete_data(session_id)

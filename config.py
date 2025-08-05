@@ -6,6 +6,7 @@ load_dotenv('.env')
 
 
 STORAGE_PATH = getenv('STORAGE_PATH')
+STORAGE_ID_LEN = int(getenv('STORAGE_ID_LEN'))
 DATABASE_URL = getenv('DATABASE_URL')
 SESSION_EXPIRE_TIME = getenv('SESSION_EXPIRE_TIME_DAYS')
 SESSION_COOKIES_EXPIRE_TIME = getenv('SESSION_COOKIES_EXPIRE_TIME_SECONDS')
@@ -24,6 +25,7 @@ def reconfigure_values_for_tests():
 
 def assert_not_none():
     assert STORAGE_PATH is not None
+    assert STORAGE_ID_LEN is not None
     assert DATABASE_URL is not None
     assert SESSION_EXPIRE_TIME is not None
     assert SESSION_COOKIES_EXPIRE_TIME is not None
