@@ -1,12 +1,12 @@
 from .exceptions import IncorrectPassword, UserDontExists
-
+from interfaces.interfaces import IAsyncModelReader
 
 class Authenticator:
     def __init__(self, user_getter, hasher, session_maker, session_reader, cacher):
         self.user_getter = user_getter
         self.hasher = hasher
         self.session_maker = session_maker
-        self.session_reader = session_reader
+        self.session_reader: IAsyncModelReader = session_reader
         self.cacher = cacher
 
     async def auth_by_session_id(self, session_id):

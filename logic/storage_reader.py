@@ -130,6 +130,3 @@ class StorageReader:
             raise TypeError(f'path arg must be str, not {type(path)}')
         entity_path = Path(self.root_dir, path)
         return entity_path.name
-
-
-

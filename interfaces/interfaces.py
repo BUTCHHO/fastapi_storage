@@ -5,6 +5,7 @@ from datetime import date
 
 from sqlalchemy.testing.suite import TrueDivTest
 
+class AbstractSQLAlchemyModel: pass
 
 @dataclass
 class UserModel:
@@ -106,6 +107,21 @@ class IModelActor(ABC):
     def delete_record_by_kwargs(self, **kwargs): pass
     @abstractmethod
     def delete_record_by_id(self, id): pass
+
+class IAsyncModelActor(ABC):
+    def create_record(self, **kwargs) -> AbstractSQLAlchemyModel: pass
+    async def create_and_write_record_to_db(self, session, **kwargs) -> None: pass
+    async def write_record_to_db(self, session, record) -> None: pass
+    async def delete_record_by_kwargs(self, session, **kwargs) -> None: pass
+    async def delete_record_by_id(self, session, **kwargs) -> None: pass
+    async def change_values_by_kwargs(self, session, new_values: dict, **kwargs) -> None: pass
+
+class IAsyncModelReader(ABC):
+    @abstractmethod
+    async def get_by_kwargs(self, session, **kwargs) -> AbstractSQLAlchemyModel|None: pass
+    @abstractmethod
+    async def get_by_id(self, session, id) -> AbstractSQLAlchemyModel|None: pass
+
 
 class ITimeHandler(ABC):
     @abstractmethod
