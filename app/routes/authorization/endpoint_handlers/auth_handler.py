@@ -39,4 +39,6 @@ class AuthHandler:
         except UserDontExists:
             raise APIUserDontExists
 
+#TODO когда в бд нету сессии, а у юзера в куки она есть, то при попытке аутентификации пробивается 500 error из за auth.exceptions.SessionDontExists
+# я хз как это исправить и почему исключение не ловится
 

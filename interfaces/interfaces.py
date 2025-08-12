@@ -1,5 +1,35 @@
 from typing import Callable
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from datetime import date
+
+from sqlalchemy.testing.suite import TrueDivTest
+
+
+@dataclass
+class UserModel:
+    id: int
+    password: str
+    name: str
+    is_admin: bool
+    storage_id: str
+
+@dataclass
+class SessionModel:
+    id: int
+    user_id: int
+    expire_date: date
+
+class IAuthenticator(ABC):
+    @abstractmethod
+    async def auth_by_session_id(self, session_id:str) -> UserModel: pass
+    @abstractmethod
+    def check_password(self, psw:str, hash_psw:str) -> bool: pass
+    @abstractmethod
+    async def auth_by_name_and_psw_and_return_session_id(self, name:str, psw:str) -> str: pass
+
+class IRegistrator(ABC):
+    async def registrate_user(self, name: str, password: str) -> True: pass
 
 class IStorageReader(ABC):
     @abstractmethod
