@@ -19,7 +19,7 @@ class Client:
             url = url[:-1]
         self._base_url = url
 
-    @@property
+    @property
     def base_url(self):
         return self._base_url
 
