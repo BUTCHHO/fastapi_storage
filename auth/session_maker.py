@@ -14,7 +14,6 @@ class SessionMaker:
 
     def _make_session_obj(self, user_id):
         session_id = self.hasher.generate_session_id_hash()
-        print(type(self.SESSION_EXPIRE_DAYS), 'TYPE OF SESSION EXPIRE DAYS', self.SESSION_EXPIRE_DAYS)
         session_expire_date = self.time_handler.add_days_to_current_date(self.SESSION_EXPIRE_DAYS)
         return self.session_actor.create_record(id=session_id, user_id=user_id, expire_date=session_expire_date)
 
