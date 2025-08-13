@@ -16,7 +16,6 @@ def test_sign_up():
 def test_sign_in():
     params = {'name': 'tester1', 'password': '123'}
     response = client.post('/_log-in', params=params)
-    print(response.content)
     assert response.status_code == 200
 
 def test_get_entities_no_params():
@@ -34,13 +33,27 @@ def test_make_dir_in_storage():
     entities = response.json()
     assert '/test_dir' in entities['entities']
 
+def test_make_nested_dir():
+    url = '/make-dir-in-storage'
+    params = {'name':'nested_dir', 'path_in_storage':'test_dir'}
+    response = client.post(url, params)
+    assert response.status_code == 200
+    response = client.get('/_get_entities', {'path_in_storage':'test_dir'})
+    json = response.json()
+    assert '/nested_dir' in json['entities']
 
+def test_search_entity():
+    url = '/_get_entities/search'
+    params = {'pattern':'nes'}
+    response = client.get(url, params)
+    assert response.status_code == 200
+    json = response.json()
+    assert '/test_dir/nested_dir' in json['entities']
 
 def test_download_entity():
     url = '/download-entity'
     params = {'entity_path_in_storage':'test_dir'}
     response = client.get(url, params)
-    print(response.headers)
     assert response.status_code == 200
     assert response.headers['content-type'] == 'application/zip'
 
@@ -52,3 +65,8 @@ def test_delete_dir_in_storage():
     response = client.get('/_get_entities')
     entities = response.json()
     assert '/test_dir' not in entities['entities']
+
+def test_logout():
+    url = '/_logout'
+    response = client.get(url)
+    assert response.status_code == 200

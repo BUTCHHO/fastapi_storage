@@ -9,8 +9,9 @@ class Client:
         self._cookies: RequestsCookieJar = RequestsCookieJar()
         self._base_url = 'http://127.0.0.1'
 
-    def update_cookies(self, cookies):
-        self._cookies.update(cookies)
+
+    def update_cookies(self, response):
+        self._cookies.update(response.cookies)
 
     def set_cookies(self, cookies):
         self._cookies = cookies
@@ -36,18 +37,17 @@ class Client:
     def get(self, url, params=None):
         url = self._join_base_url_and_route_url(url)
         response = requests.get(url, params=params,cookies=self.cookies)
-        self.update_cookies(response.cookies)
+        self.update_cookies(response)
         return response
 
     def post(self, url, params):
         url = self._join_base_url_and_route_url(url)
-        print(url, 'HERE IS URL')
         response = requests.post(url, params=params, cookies=self.cookies)
-        self.update_cookies(response.cookies)
+        self.update_cookies(response)
         return response
 
     def delete(self, url , params):
         url = self._join_base_url_and_route_url(url)
         response = requests.delete(url, params=params, cookies=self.cookies)
-        self.update_cookies(response.cookies)
+        self.update_cookies(response)
         return response

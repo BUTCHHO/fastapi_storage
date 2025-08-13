@@ -14,7 +14,7 @@ def run_server():
         stderr=subprocess.PIPE
     )
 
-    sleep(5)
+    sleep(3)
     return server_process
 
 async def prepare_tables():
@@ -32,7 +32,7 @@ def run():
     print('preparing')
     prepare_for_tests()
     print('prepare finish')
-    print('running server, please wait...')
+    print('starting server, please wait...')
     server_process = run_server()
     print('server is ready')
     print('running_tests')
