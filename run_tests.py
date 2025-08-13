@@ -40,5 +40,6 @@ def run():
     print('tests finish!')
     print('killing server...')
     os.kill(server_process.pid, signal.SIGKILL)
-    print('finish!8')
+    print('finish!')
+
 run()

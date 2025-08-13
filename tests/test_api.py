@@ -9,10 +9,8 @@ client = Client()
 client.set_base_url('http://0.0.0.0:8000')
 
 def test_sign_up():
-    print('IN TESTS')
     params = {'name': 'tester1', 'password': '123'}
     response = client.post('/_sign-up', params=params)
-    print(response.content)
     assert response.status_code == 200
 
 def test_sign_in():
@@ -21,40 +19,36 @@ def test_sign_in():
     print(response.content)
     assert response.status_code == 200
 
-def test_view_root_storage():
-    url = '/storage'
-    params = {"user_id": 1}
-    response = client.get(url=url, params=params)
-    json = response.json()
+def test_get_entities_no_params():
+    response = client.get('/_get_entities')
+    entities = response.json()
+    assert type(entities['entities']) is list
     assert response.status_code == 200
-    assert 'entities' in json
 
-def test_view_storage():
-    url = '/storage/music%2Fletov?user_id=1'
-    params = {"user_id": 1}
-    response = client.get(url=url, params=params)
-    assert  response.status_code == 200
-    assert 'entities' in response.json()
-
-
-def test_download_dir():
-    url = '/download-entity'
-    params = {"user_id": 1, "entity_path_in_storage": 'music/nirvana'}
-    response = client.get(url=url, params=params)
-    headers = response.headers
-    content_len = int(headers['content-length'])
+def test_make_dir_in_storage():
+    url = '/make-dir-in-storage'
+    params = {'name':'test_dir'}
+    response = client.post(url, params)
     assert response.status_code == 200
-    assert content_len > 0
+    response = client.get('/_get_entities')
+    entities = response.json()
+    assert '/test_dir' in entities['entities']
 
-def test_download_file():
+
+
+def test_download_entity():
     url = '/download-entity'
-    params = {"user_id": 1, "entity_path_in_storage": 'images/Desert.jpg'}
-    response = client.get(url=url, params=params)
-    headers = response.headers
-    content_len = int(headers['content-length'])
-    status_code = response.status_code
-    assert status_code == 200
-    assert content_len > 0
+    params = {'entity_path_in_storage':'test_dir'}
+    response = client.get(url, params)
+    print(response.headers)
+    assert response.status_code == 200
+    assert response.headers['content-type'] == 'application/zip'
 
-def test_upload_entity():
-    print('not_impl')
+def test_delete_dir_in_storage():
+    url = '/delete-entity-in-storage'
+    params = {'password':'123', 'path_in_storage':'test_dir'}
+    response = client.delete(url, params)
+    assert response.status_code == 200
+    response = client.get('/_get_entities')
+    entities = response.json()
+    assert '/test_dir' not in entities['entities']

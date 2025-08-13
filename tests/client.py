@@ -33,7 +33,7 @@ class Client:
             return f'{self.base_url}/{url}'
         return f'{self.base_url}{url}'
 
-    def get(self, url, params):
+    def get(self, url, params=None):
         url = self._join_base_url_and_route_url(url)
         response = requests.get(url, params=params,cookies=self.cookies)
         self.update_cookies(response.cookies)
