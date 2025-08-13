@@ -1,7 +1,7 @@
 from fastapi import APIRouter, UploadFile, Query, Depends
 from .schemas.query import UploadQuery
 from .endpoint_handlers import UploadFileHandler
-from app.singletones import storage_writer, path_ensurer, logger, path_joiner
+from app.containers import storage_writer, path_ensurer, logger, path_joiner
 
 from app.routes.dependencies import auth_depend
 

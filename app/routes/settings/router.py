@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from ..dependencies import auth_depend
 from .schemas.query import AccountDeleteQuery
 
-from app.singletones import user_actor, logger, user_logouter, storage_deleter
+from app.containers import user_actor, logger, user_logouter, storage_deleter
 
 from .endpoint_handlers import SettingsHandler
 

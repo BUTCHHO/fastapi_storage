@@ -1,36 +1,24 @@
 from dotenv import load_dotenv
 from os import getenv
+from pydantic_settings import BaseSettings
 
 load_dotenv('.env')
 
-
-
-STORAGE_PATH = getenv('STORAGE_PATH')
-STORAGE_ID_LEN = int(getenv('STORAGE_ID_LEN'))
-DATABASE_URL = getenv('DATABASE_URL')
-SESSION_EXPIRE_TIME = getenv('SESSION_EXPIRE_TIME_DAYS')
-SESSION_COOKIES_EXPIRE_TIME = getenv('SESSION_COOKIES_EXPIRE_TIME_SECONDS')
-CACHE_HOST = getenv('CACHE_HOST')
-CACHE_PORT = int(getenv('CACHE_PORT'))
-CACHE_EXPIRE_TIME = getenv('CACHE_EXPIRE_TIME_SECONDS')
+class Config(BaseSettings):
+    STORAGE_PATH: str
+    STORAGE_ID_LEN: int
+    DATABASE_URL: str
+    SESSION_EXPIRE_TIME: str
+    SESSION_COOKIES_EXPIRE_TIME: str
+    CACHE_HOST: str
+    CACHE_PORT: int
+    CACHE_EXPIRE_TIME: str
+    class Config:
+        env_file = '.env'
+        env_file_encoding = 'utf-8'
 
 def reconfigure_values_for_tests():
-    global STORAGE_PATH
-    global DATABASE_URL
-    global CACHE_PORT
-    STORAGE_PATH = getenv('TEST_STORAGE_PATH')
-    DATABASE_URL = getenv('TEST_DATABASE_URL')
-    CACHE_PORT = getenv('TEST_CACHE_PORT')
-    assert_not_none()
+    Config.STORAGE_PATH = getenv('TEST_STORAGE_PATH')
+    Config.DATABASE_URL = getenv('TEST_DATABASE_URL')
+    Config.CACHE_PORT = int(getenv('TEST_CACHE_PORT'))
 
-def assert_not_none():
-    assert STORAGE_PATH is not None
-    assert STORAGE_ID_LEN is not None
-    assert DATABASE_URL is not None
-    assert SESSION_EXPIRE_TIME is not None
-    assert SESSION_COOKIES_EXPIRE_TIME is not None
-    assert CACHE_PORT is not None
-    assert CACHE_HOST is not None
-    assert CACHE_EXPIRE_TIME is not None
-
-assert_not_none()

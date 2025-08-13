@@ -8,12 +8,22 @@ from .routes import download_router, settings_router, auth_router, upload_router
 from alchemy.models import Base
 from alchemy.async_engine import async_engine
 
+from config import Config
+
+from .containers import Container
+from dependency_injector.wiring import wire
+
 browser_static_dir = Path(__file__).parent / 'routes/browser/static'
 global_static_dir = Path(__file__).parent / 'static'
 
 browser_static = StaticFiles(directory=browser_static_dir)
 global_static = StaticFiles(directory=global_static_dir)
+container = Container()
 
+container.wire(['routes.authorization.router', 'routes.browser.router', 'routes.download.router',
+                'routes.settings.router', 'routes.storage_acting.router', 'routes.upload.router'])
+
+container.config.from_pydantic(Config)
 
 @asynccontextmanager
 async def lifespan(fastapi_app: FastAPI):

@@ -2,7 +2,7 @@ from fastapi import APIRouter, BackgroundTasks, Query, Depends
 
 from .schemas.query import DownloadQuery
 from .endpoint_handlers import FileResponseHandler
-from app.singletones import archivator, logger, path_joiner, path_ensurer, storage_reader
+from app.containers import archivator, logger, path_joiner, path_ensurer, storage_reader
 from app.routes.dependencies import auth_depend
 
 download_router = APIRouter()

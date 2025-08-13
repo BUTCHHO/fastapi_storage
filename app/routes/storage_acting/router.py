@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, Query
 
 from .schemas.query import MakeDirInStorageQuery, DeleteEntityQuery
 from .endpoint_handlers import MakeDirHandler, DeleteEntityHandler
-from app.singletones import logger, storage_writer, path_joiner, path_ensurer
+from app.containers import logger, storage_writer, path_joiner, path_ensurer
 from app.routes.dependencies import auth_depend
 
 storage_acting_router = APIRouter()
