@@ -1,6 +1,5 @@
+from dependency_injector import containers, providers
 from redis import Redis
-
-# from auth.user_deleter import UserDeleter not impl
 from utils import Logger, TimeHandler, PathCutter, PathJoiner, PathValidEnsurer, Hasher
 from logic import StorageReader, StorageWriter, Archivator, StorageDeleter
 from db_repository import ModelReader, ModelActor
@@ -13,27 +12,49 @@ from cache_handler import RedisCacher
 from alchemy import User, Session
 from alchemy.async_engine import async_engine
 
-from config import STORAGE_PATH, CACHE_EXPIRE_TIME, CACHE_HOST, CACHE_PORT, SESSION_EXPIRE_TIME
+from routes.storage_acting.endpoint_handlers import MakeDirHandler, DeleteEntityHandler
+from routes.upload.endpoint_handlers import UploadFileHandler
+from routes.settings.endpoint_handlers import SettingsHandler
+from routes.authorization.endpoint_handlers import SignUpHandler, LogOutHandler, AuthHandler
+from routes.browser.handlers import BrowserEndpointHandler
+from routes.download.endpoint_handlers import FileResponseHandler
 
-logger = Logger()
-redis_client = Redis(host=CACHE_HOST, port=CACHE_PORT, decode_responses=True)
-path_joiner = PathJoiner(STORAGE_PATH)
-path_cutter = PathCutter(STORAGE_PATH)
-path_ensurer = PathValidEnsurer(STORAGE_PATH, path_cutter, path_joiner)
-archivator = Archivator()
-time_handler = TimeHandler()
-storage_reader = StorageReader(STORAGE_PATH, path_joiner, path_cutter)
-storage_writer = StorageWriter(STORAGE_PATH)
-storage_deleter = StorageDeleter(storage_writer)
-hasher = Hasher()
-redis_cacher = RedisCacher(redis_client, CACHE_EXPIRE_TIME)
-user_reader = ModelReader(User, logger, async_engine)
-user_actor = ModelActor(User, logger, async_engine)
-session_reader = ModelReader(Session, logger, async_engine)
-session_actor = ModelActor(Session, logger, async_engine)
-session_maker = SessionMaker(session_reader, session_actor, time_handler, hasher, redis_cacher, int(SESSION_EXPIRE_TIME))
-user_getter = UserGetter(user_reader, session_reader, redis_cacher, time_handler)
-user_registrator = Registrator(user_actor, user_reader, hasher)
-user_authenticator = Authenticator(user_getter, hasher, session_maker, session_reader, redis_cacher)
-user_logouter = Logouter(user_reader, session_reader, session_actor, redis_cacher)
-# user_deleter = UserDeleter(user_actor) not impl
+
+
+class Container(containers.DeclarativeContainer):
+
+    config = providers.Configuration()
+
+    logger = providers.Singleton(Logger)
+    redis_client = providers.Singleton(Redis, host=config.CACHE_HOST, port=config.CACHE_PORT, decode_responses=True)
+    path_joiner = providers.Singleton(PathJoiner, config.STORAGE_PATH)
+    path_cutter = providers.Singleton(PathCutter, config.STORAGE_PATH)
+    path_ensurer = providers.Singleton(PathValidEnsurer, config.STORAGE_PATH, path_cutter, path_joiner)
+    archivator = providers.Singleton(Archivator)
+    time_handler = providers.Singleton(TimeHandler)
+    storage_reader = providers.Singleton(StorageReader, config.STORAGE_PATH, path_joiner, path_cutter)
+    storage_writer = providers.Singleton(StorageWriter, config.STORAGE_PATH)
+    storage_deleter = providers.Singleton(StorageDeleter, storage_writer)
+    hasher = providers.Singleton(Hasher)
+    cacher = providers.Singleton(RedisCacher, redis_client, config.CACHE_EXPIRE_TIME)
+    user_reader = providers.Singleton(ModelReader, User, logger, async_engine)
+    user_actor = providers.Singleton(ModelActor, User, logger, async_engine)
+    session_reader = providers.Singleton(ModelReader, Session, logger, async_engine)
+    session_actor = providers.Singleton(ModelActor, Session, logger, async_engine)
+    session_maker = providers.Singleton(SessionMaker, session_reader, session_actor, time_handler, hasher, cacher, config.SESSION_EXPIRE_TIME)
+    user_getter = providers.Singleton(UserGetter, user_reader, session_reader, cacher, time_handler)
+    user_registrator = providers.Singleton(Registrator, user_actor, user_reader, hasher)
+    user_authenticator = providers.Singleton(Authenticator, user_getter, hasher, session_maker, session_reader, cacher)
+    user_logouter = providers.Singleton(Logouter, user_reader, session_reader, session_actor, cacher)
+
+
+
+    make_dir_handler = providers.Singleton(MakeDirHandler, logger, storage_writer, path_joiner, path_ensurer)
+    delete_entity_handler = providers.Singleton(DeleteEntityHandler, path_ensurer, storage_writer, path_joiner, logger)
+    upload_file_handler = providers.Singleton(UploadFileHandler, storage_writer, path_ensurer, logger, path_joiner)
+    settings_handler = providers.Singleton(SettingsHandler, user_actor, logger, user_logouter, storage_deleter)
+    sign_up_handler = providers.Singleton(SignUpHandler, user_registrator, storage_writer, user_reader, user_actor, hasher)
+    logout_handler = providers.Singleton(LogOutHandler, user_logouter, logger)
+    auth_handler = providers.Singleton(AuthHandler, user_authenticator)
+    browser_endpoint_handler = providers.Singleton(BrowserEndpointHandler, storage_reader, logger, path_joiner, path_cutter, path_ensurer)
+    file_response_handler = providers.Singleton(FileResponseHandler, archivator, storage_reader, logger, path_ensurer, path_joiner)

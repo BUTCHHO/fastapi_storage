@@ -74,7 +74,6 @@ def test_logout():
     url = '/_logout'
     response = client.get(url)
     assert response.status_code == 200
-    print(client.cookies)
 
 def test_delete_acc():
     response_login = client.post('/_log-in', {'name':'tester1', 'password':'123'})

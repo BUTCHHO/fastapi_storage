@@ -5,6 +5,7 @@ asyncpg==0.30.0
 certifi==2025.6.15
 charset-normalizer==3.4.3
 click==8.2.1
+dependency-injector==4.48.1
 dnspython==2.7.0
 email_validator==2.2.0
 fastapi==0.115.12
