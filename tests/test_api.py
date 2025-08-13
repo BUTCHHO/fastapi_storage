@@ -1,9 +1,9 @@
 
 from .client import Client
 
-from config import reconfigure_values_for_tests
+from config import Config
 
-reconfigure_values_for_tests()
+Config.reconfigure_values_for_tests()
 
 client = Client()
 client.set_base_url('http://0.0.0.0:8000')

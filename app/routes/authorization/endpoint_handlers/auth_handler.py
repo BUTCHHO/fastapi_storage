@@ -5,14 +5,14 @@ from auth.authentication import Authenticator
 from exceptions import APIIncorrectPassword, APIUserDontExists, \
     APISessionDontExists, APISessionExpired, APIUnauthorized
 from auth.exceptions import IncorrectPassword, UserDontExists, SessionDontExists, SessionExpired
-from config import SESSION_COOKIES_EXPIRE_TIME
 
 class AuthHandler:
-    def __init__(self, authenticator):
+    def __init__(self, authenticator, session_cookies_expire_time):
         self.authenticator: Authenticator = authenticator
+        self.SESSION_COOKIES_EXPIRE_TIME = session_cookies_expire_time
 
     def set_session_id_cookie(self, session_id, response: Response):
-        response.set_cookie(key="session_id", value=session_id, max_age=SESSION_COOKIES_EXPIRE_TIME,
+        response.set_cookie(key="session_id", value=session_id, max_age=self.SESSION_COOKIES_EXPIRE_TIME,
                             samesite='lax', httponly=True)
 
     def check_password(self, password, user):

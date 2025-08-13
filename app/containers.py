@@ -12,18 +12,20 @@ from cache_handler import RedisCacher
 from alchemy import User, Session
 from alchemy.async_engine import async_engine
 
-from routes.storage_acting.endpoint_handlers import MakeDirHandler, DeleteEntityHandler
-from routes.upload.endpoint_handlers import UploadFileHandler
-from routes.settings.endpoint_handlers import SettingsHandler
-from routes.authorization.endpoint_handlers import SignUpHandler, LogOutHandler, AuthHandler
-from routes.browser.handlers import BrowserEndpointHandler
-from routes.download.endpoint_handlers import FileResponseHandler
+from app.routes.storage_acting.endpoint_handlers import MakeDirHandler, DeleteEntityHandler
+from app.routes.upload.endpoint_handlers import UploadFileHandler
+from app.routes.settings.endpoint_handlers import SettingsHandler
+from app.routes.authorization.endpoint_handlers import SignUpHandler, LogOutHandler, AuthHandler
+from app.routes.browser.handlers import BrowserEndpointHandler
+from app.routes.download.endpoint_handlers import FileResponseHandler
 
-
+from depends.auth import AuthDepend
 
 class Container(containers.DeclarativeContainer):
 
     config = providers.Configuration()
+
+    async_engine_provider = providers.Object(async_engine)
 
     logger = providers.Singleton(Logger)
     redis_client = providers.Singleton(Redis, host=config.CACHE_HOST, port=config.CACHE_PORT, decode_responses=True)
@@ -37,10 +39,10 @@ class Container(containers.DeclarativeContainer):
     storage_deleter = providers.Singleton(StorageDeleter, storage_writer)
     hasher = providers.Singleton(Hasher)
     cacher = providers.Singleton(RedisCacher, redis_client, config.CACHE_EXPIRE_TIME)
-    user_reader = providers.Singleton(ModelReader, User, logger, async_engine)
-    user_actor = providers.Singleton(ModelActor, User, logger, async_engine)
-    session_reader = providers.Singleton(ModelReader, Session, logger, async_engine)
-    session_actor = providers.Singleton(ModelActor, Session, logger, async_engine)
+    user_reader = providers.Singleton(ModelReader, User, logger, async_engine_provider)
+    user_actor = providers.Singleton(ModelActor, User, logger, async_engine_provider)
+    session_reader = providers.Singleton(ModelReader, Session, logger, async_engine_provider)
+    session_actor = providers.Singleton(ModelActor, Session, logger, async_engine_provider)
     session_maker = providers.Singleton(SessionMaker, session_reader, session_actor, time_handler, hasher, cacher, config.SESSION_EXPIRE_TIME)
     user_getter = providers.Singleton(UserGetter, user_reader, session_reader, cacher, time_handler)
     user_registrator = providers.Singleton(Registrator, user_actor, user_reader, hasher)
@@ -53,8 +55,13 @@ class Container(containers.DeclarativeContainer):
     delete_entity_handler = providers.Singleton(DeleteEntityHandler, path_ensurer, storage_writer, path_joiner, logger)
     upload_file_handler = providers.Singleton(UploadFileHandler, storage_writer, path_ensurer, logger, path_joiner)
     settings_handler = providers.Singleton(SettingsHandler, user_actor, logger, user_logouter, storage_deleter)
-    sign_up_handler = providers.Singleton(SignUpHandler, user_registrator, storage_writer, user_reader, user_actor, hasher)
+    sign_up_handler = providers.Singleton(SignUpHandler, user_registrator, storage_writer, user_reader, user_actor, hasher, config.STORAGE_ID_LEN)
     logout_handler = providers.Singleton(LogOutHandler, user_logouter, logger)
-    auth_handler = providers.Singleton(AuthHandler, user_authenticator)
+    auth_handler = providers.Singleton(AuthHandler, user_authenticator, config.SESSION_COOKIES_EXPIRE_TIME)
     browser_endpoint_handler = providers.Singleton(BrowserEndpointHandler, storage_reader, logger, path_joiner, path_cutter, path_ensurer)
     file_response_handler = providers.Singleton(FileResponseHandler, archivator, storage_reader, logger, path_ensurer, path_joiner)
+
+
+    auth_depend = providers.Singleton(AuthDepend, auth_handler)
+    auth_provider = providers.Callable(auth_depend().auth)
+    ask_for_password_provider = providers.Callable(auth_depend().ask_for_password)

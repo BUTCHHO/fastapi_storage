@@ -1,24 +1,47 @@
 from dotenv import load_dotenv
 from os import getenv
-from pydantic_settings import BaseSettings
 
 load_dotenv('.env')
 
-class Config(BaseSettings):
-    STORAGE_PATH: str
-    STORAGE_ID_LEN: int
-    DATABASE_URL: str
-    SESSION_EXPIRE_TIME: str
-    SESSION_COOKIES_EXPIRE_TIME: str
-    CACHE_HOST: str
-    CACHE_PORT: int
-    CACHE_EXPIRE_TIME: str
-    class Config:
-        env_file = '.env'
-        env_file_encoding = 'utf-8'
 
-def reconfigure_values_for_tests():
-    Config.STORAGE_PATH = getenv('TEST_STORAGE_PATH')
-    Config.DATABASE_URL = getenv('TEST_DATABASE_URL')
-    Config.CACHE_PORT = int(getenv('TEST_CACHE_PORT'))
+class Config:
+    STORAGE_PATH = getenv('STORAGE_PATH')
+    STORAGE_ID_LEN = int(getenv('STORAGE_ID_LEN'))
+    DATABASE_URL = getenv('DATABASE_URL')
+    SESSION_EXPIRE_TIME = getenv('SESSION_EXPIRE_TIME_DAYS')
+    SESSION_COOKIES_EXPIRE_TIME = getenv('SESSION_COOKIES_EXPIRE_TIME_SECONDS')
+    CACHE_HOST = getenv('CACHE_HOST')
+    CACHE_PORT = int(getenv('CACHE_PORT'))
+    CACHE_EXPIRE_TIME = getenv('CACHE_EXPIRE_TIME_SECONDS')
 
+    @classmethod
+    def to_dict(cls):
+        config = {'STORAGE_PATH':cls.STORAGE_PATH,
+                  'STORAGE_ID_LEN': cls.STORAGE_ID_LEN,
+                  'DATABASE_URL': cls.DATABASE_URL,
+                  'SESSION_EXPIRE_TIME': cls.SESSION_EXPIRE_TIME,
+                  'SESSION_COOKIES_EXPIRE_TIME': cls.SESSION_COOKIES_EXPIRE_TIME,
+                  'CACHE_HOST': cls.CACHE_HOST,
+                  'CACHE_PORT': cls.CACHE_PORT,
+                  'CACHE_EXPIRE_TIME': cls.CACHE_EXPIRE_TIME}
+        return config
+
+    @classmethod
+    def reconfigure_values_for_tests(cls):
+        cls.STORAGE_PATH = getenv('TEST_STORAGE_PATH')
+        cls.DATABASE_URL = getenv('TEST_DATABASE_URL')
+        cls.CACHE_PORT = getenv('TEST_CACHE_PORT')
+        cls.assert_not_none()
+
+    @classmethod
+    def assert_not_none(cls):
+        assert cls.STORAGE_PATH is not None
+        assert cls.STORAGE_ID_LEN is not None
+        assert cls.DATABASE_URL is not None
+        assert cls.SESSION_EXPIRE_TIME is not None
+        assert cls.SESSION_COOKIES_EXPIRE_TIME is not None
+        assert cls.CACHE_PORT is not None
+        assert cls.CACHE_HOST is not None
+        assert cls.CACHE_EXPIRE_TIME is not None
+
+Config.assert_not_none()

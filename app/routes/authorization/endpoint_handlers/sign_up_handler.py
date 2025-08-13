@@ -2,16 +2,15 @@ from exceptions import APIUserAlreadyExists, APIUserStorageAlreadyExists
 from auth.exceptions import UserAlreadyExists
 from interfaces import IStorageWriter
 from auth.registration import Registrator
-from config import STORAGE_ID_LEN
 
 class SignUpHandler:
-    def __init__(self, user_registrator, storage_writer, user_reader, user_actor, hasher):
+    def __init__(self, user_registrator, storage_writer, user_reader, user_actor, hasher, storage_id_len):
         self.user_registrator: Registrator = user_registrator
         self.storage_writer: IStorageWriter = storage_writer
         self.user_reader = user_reader
         self.user_actor = user_actor
         self.hasher = hasher
-        self.STORAGE_ID_LEN = STORAGE_ID_LEN
+        self.STORAGE_ID_LEN = storage_id_len
 
 
     async def sign_up(self, params):
