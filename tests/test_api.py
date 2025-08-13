@@ -8,6 +8,10 @@ reconfigure_values_for_tests()
 client = Client()
 client.set_base_url('http://0.0.0.0:8000')
 
+def test_get_entities_no_params_no_login():
+    response = client.get('/_get_entities')
+    assert response.status_code == 401
+
 def test_sign_up():
     params = {'name': 'tester1', 'password': '123'}
     response = client.post('/_sign-up', params=params)
@@ -70,3 +74,13 @@ def test_logout():
     url = '/_logout'
     response = client.get(url)
     assert response.status_code == 200
+    print(client.cookies)
+
+def test_delete_acc():
+    response_login = client.post('/_log-in', {'name':'tester1', 'password':'123'})
+    assert response_login.status_code == 200
+    params = {'password':'123'}
+    response = client.delete('/settings/delete_acc', params)
+    assert response.status_code == 200
+    response_login = client.post('/_log-in', {'name':'tester1', 'password':'123'})
+    assert response_login.status_code == 404

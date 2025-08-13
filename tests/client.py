@@ -11,6 +11,15 @@ class Client:
 
 
     def update_cookies(self, response):
+        try:
+            headers = response.headers
+            cookie: str = headers['set-cookie']
+            cookie: list[str] = cookie.split(';')
+            if ' Max-Age=0' in cookie:
+                name = cookie[0].split('=')[0]
+                del self._cookies[name]
+        except KeyError:
+            pass
         self._cookies.update(response.cookies)
 
     def set_cookies(self, cookies):
