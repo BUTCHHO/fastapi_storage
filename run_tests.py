@@ -1,23 +1,31 @@
 import asyncio
 import signal
 import subprocess
-from alchemy.async_engine import async_engine
-from alchemy.models import Base
 from time import sleep
 import os
 import pytest
+from config import Config
+
+Config.reconfigure_values_for_tests()
 
 def run_server():
+    env = os.environ.copy()
+    env["DATABASE_URL"] = env["TEST_DATABASE_URL"]
+    env["STORAGE_PATH"] = env['TEST_STORAGE_PATH']
     server_process = subprocess.Popen(
         ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"],
         stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE
+        stderr=subprocess.PIPE,
+        env=env
     )
 
     sleep(3)
     return server_process
 
 async def prepare_tables():
+    from alchemy.async_engine import async_engine
+    print(async_engine.url,' URL')
+    from alchemy.models import Base
     async with async_engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
