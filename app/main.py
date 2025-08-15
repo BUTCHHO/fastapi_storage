@@ -5,6 +5,7 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 
 from .routes import download_router, settings_router, auth_router, upload_router ,storage_acting_router ,browser_router
+from .middlewares.exception_middleware import ExceptionCatcherMiddleware
 from alchemy.models import Base
 from alchemy.async_engine import async_engine
 
@@ -34,6 +35,8 @@ async def lifespan(fastapi_app: FastAPI):
     yield
 
 app = FastAPI(lifespan=lifespan)
+
+app.add_middleware(ExceptionCatcherMiddleware)
 
 app.mount('/browser/static', browser_static, 'browser_static')
 app.mount('/static', global_static, 'static')

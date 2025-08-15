@@ -1,4 +1,4 @@
-from exceptions import APIEntityDoesNotExists, APITooManyFiles
+from exceptions.path_exc import TooManyFiles, EntityDoesNotExists
 from interfaces import ILogger, IStorageWriter
 
 class UploadFileHandler:
@@ -22,17 +22,16 @@ class UploadFileHandler:
         try:
             for file in files:
                 rel_fpath_with_id = self.create_rel_fpath_with_id(user_id, output_path, file.filename)
-                print(rel_fpath_with_id)
                 await self.storage_writer.async_write_from_fastapi_uploadfile_to_file(file, rel_fpath_with_id)
         except FileNotFoundError:
-            raise APIEntityDoesNotExists(output_path)
+            raise EntityDoesNotExists(output_path)
         except Exception as e:
             self.logger.log(e)
             raise e
 
     async def save_files_to_storage(self, storage_id, path_in_storage, files: list):
         if len(files) > self.max_upload_files:
-            raise APITooManyFiles
+            raise TooManyFiles
         if path_in_storage is None:
             path_in_storage = ''
         self.path_ensurer.ensure_path_safety(storage_id, path_in_storage)

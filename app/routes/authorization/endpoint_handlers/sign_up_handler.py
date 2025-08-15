@@ -14,17 +14,13 @@ class SignUpHandler:
 
 
     async def sign_up(self, params):
-        try:
-            await self.user_registrator.registrate_user(params.name, params.password)
-            user = await self.user_reader.get_by_kwargs(name = params.name)
-            await self.create_user_storage(user)
-        except UserAlreadyExists:
-            raise APIUserAlreadyExists(params.name)
+        await self.user_registrator.registrate_user(params.name, params.password)
+        user = await self.user_reader.get_by_kwargs(name = params.name)
+        await self.create_user_storage(user)
+
 
     async def create_user_storage(self, user):
-        try:
-            storage_id = self.hasher.generate_hash(self.STORAGE_ID_LEN)
-            self.storage_writer.create_dir('', storage_id, exist_ok=False)
-            await self.user_actor.change_values_by_kwargs(new_values={'storage_id':storage_id}, name=user.name)
-        except FileExistsError:
-            raise APIUserStorageAlreadyExists
+        storage_id = self.hasher.generate_hash(self.STORAGE_ID_LEN)
+        self.storage_writer.create_dir('', storage_id, exist_ok=False)
+        await self.user_actor.change_values_by_kwargs(new_values={'storage_id':storage_id}, name=user.name)
+

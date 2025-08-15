@@ -27,3 +27,8 @@ class SessionExpired(Exception):
     def __init__(self, ses_id=None):
         msg = f'Session {ses_id} dont exists'
         super().__init__(msg)
+
+class Unauthorized(Exception):
+    def __init__(self):
+        msg = f'Unauthorized'
+        super().__init__(msg)

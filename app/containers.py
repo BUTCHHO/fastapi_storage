@@ -51,15 +51,15 @@ class Container(containers.DeclarativeContainer):
 
 
 
-    make_dir_handler = providers.Singleton(MakeDirHandler, logger, storage_writer, path_joiner, path_ensurer)
-    delete_entity_handler = providers.Singleton(DeleteEntityHandler, path_ensurer, storage_writer, path_joiner, logger)
-    upload_file_handler = providers.Singleton(UploadFileHandler, storage_writer, path_ensurer, logger, path_joiner)
-    settings_handler = providers.Singleton(SettingsHandler, user_actor, logger, user_logouter, storage_deleter)
+    make_dir_handler = providers.Singleton(MakeDirHandler, storage_writer, path_joiner, path_ensurer)
+    delete_entity_handler = providers.Singleton(DeleteEntityHandler, path_ensurer, storage_writer, path_joiner)
+    upload_file_handler = providers.Singleton(UploadFileHandler, storage_writer, path_ensurer, path_joiner)
+    settings_handler = providers.Singleton(SettingsHandler, user_actor, user_logouter, storage_deleter)
     sign_up_handler = providers.Singleton(SignUpHandler, user_registrator, storage_writer, user_reader, user_actor, hasher, config.STORAGE_ID_LEN)
-    logout_handler = providers.Singleton(LogOutHandler, user_logouter, logger)
+    logout_handler = providers.Singleton(LogOutHandler, user_logouter)
     auth_handler = providers.Singleton(AuthHandler, user_authenticator, config.SESSION_COOKIES_EXPIRE_TIME)
-    browser_endpoint_handler = providers.Singleton(BrowserEndpointHandler, storage_reader, logger, path_joiner, path_cutter, path_ensurer)
-    file_response_handler = providers.Singleton(FileResponseHandler, archivator, storage_reader, logger, path_ensurer, path_joiner)
+    browser_endpoint_handler = providers.Singleton(BrowserEndpointHandler, storage_reader, path_joiner, path_cutter, path_ensurer)
+    file_response_handler = providers.Singleton(FileResponseHandler, archivator, storage_reader, path_ensurer, path_joiner)
 
 
     auth_depend = providers.Singleton(AuthDepend, auth_handler)
