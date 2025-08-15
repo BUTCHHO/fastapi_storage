@@ -5,12 +5,12 @@ class TooManyFiles(Exception):
         msg = 'Too many files uploaded'
         super().__init__(msg)
 
-class APIUserStorageAlreadyExists():
+class UserStorageAlreadyExists():
     def __init__(self):
         detail = 'Storage for this user already exists. Failed to create new storage'
         super().__init__( detail)
 
-class APIDirectoryAlreadyExists():
+class DirectoryAlreadyExists():
     def __init__(self, path):
         detail = f'Directory at {path} already exists'
         super().__init__(detail)

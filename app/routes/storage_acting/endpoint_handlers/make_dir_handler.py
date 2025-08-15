@@ -1,7 +1,7 @@
 from path_explorator import EntityDoesNotExists, EntityIsNotADir
 
 from interfaces import IStorageWriter
-from exceptions import APIEntityIsNotADir, APIDirectoryAlreadyExists, APIEntityDoesNotExists
+from exceptions import APIEntityIsNotADir, APIEntityDoesNotExists
 
 
 

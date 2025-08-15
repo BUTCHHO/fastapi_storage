@@ -3,7 +3,6 @@ import shutil
 from aiofiles import open as aio_open
 from pathlib import Path
 
-from path_explorator import EntityIsNotADir
 
 from exceptions.path_exc import EntityDoesNotExists
 
@@ -16,7 +15,6 @@ class StorageWriter:
 
     def delete_entity(self, path: str | None):
         entity = Path(self.root_dir, path)
-        print(entity,' HERE IS ENTITY YOU SEE ')
         if entity.exists():
             if entity.is_dir():
                 shutil.rmtree(entity)
@@ -35,6 +33,7 @@ class StorageWriter:
         you can set path param as empty string if you need to make dir in root_ dir
         :param name: name of dir
         :return: None
+        :raises: FileExistsError
         """
         if path is None:
             path = ''
@@ -47,7 +46,6 @@ class StorageWriter:
             root_dir.mkdir(exist_ok=exist_ok)
         except FileNotFoundError:
             raise EntityDoesNotExists('')
-
     def create_file(self, path: str | None , name: str, exist_ok):
         """
         Create file in specified path with specified name
