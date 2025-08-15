@@ -33,6 +33,6 @@ class APISessionExpired(HTTPException):
 
 class APIUnauthorized(HTTPException):
     def __init__(self):
-        detail = {"message": f'you have to log in to see this page', "code": 'unauthorized'}
-        status_code = 401
-        super().__init__(status_code, detail)
+        self.detail = {"message": f'you have to log in to see this page', "code": 'unauthorized'}
+        self.status_code = 401
+        super().__init__(self.status_code, self.detail)
