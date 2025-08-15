@@ -22,6 +22,11 @@ def test_sign_in():
     response = client.post('/_log-in', params=params)
     assert response.status_code == 200
 
+def test_sign_in_already_signed_in():
+    params = {'name':'tester1', 'password':'123'}
+    response = client.post('/_log-in', params=params)
+    assert response.status_code == 200
+
 def test_get_entities_no_params():
     response = client.get('/_get_entities')
     entities = response.json()

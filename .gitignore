@@ -10,3 +10,4 @@ env/
 .idea/
 *.egg-info/
 *.egg
+all_code.txt
