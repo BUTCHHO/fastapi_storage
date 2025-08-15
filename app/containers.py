@@ -44,7 +44,7 @@ class Container(containers.DeclarativeContainer):
     session_reader = providers.Singleton(ModelReader, Session, logger, async_engine_provider)
     session_actor = providers.Singleton(ModelActor, Session, logger, async_engine_provider)
     session_maker = providers.Singleton(SessionMaker, session_reader, session_actor, time_handler, hasher, cacher, config.SESSION_EXPIRE_TIME)
-    user_getter = providers.Singleton(UserGetter, user_reader, session_reader, cacher, time_handler)
+    user_getter = providers.Singleton(UserGetter, user_reader, session_reader, session_actor, cacher, time_handler)
     user_registrator = providers.Singleton(Registrator, user_actor, user_reader, hasher)
     user_authenticator = providers.Singleton(Authenticator, user_getter, hasher, session_maker, session_reader, cacher)
     user_logouter = providers.Singleton(Logouter, user_reader, session_reader, session_actor, cacher)

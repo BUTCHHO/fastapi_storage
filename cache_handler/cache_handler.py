@@ -31,7 +31,8 @@ class RedisCacher(Cacher):
         super().__init__(redis_client, data_expire_time)
 
     def get_data(self, key):
-        d = self.client.get(key)
+        return self.client.get(key)
+
 
     def put_data(self, key, value):
         self.client.set(key, value, ex=self.expire_time, nx=True)
