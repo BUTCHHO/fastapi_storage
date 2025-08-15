@@ -12,6 +12,7 @@ def run_server():
     env = os.environ.copy()
     env["DATABASE_URL"] = env["TEST_DATABASE_URL"]
     env["STORAGE_PATH"] = env['TEST_STORAGE_PATH']
+    env["CACHE_PORT"] = env['TEST_CACHE_PORT'] #make sure you have config for the corresponding cache port
     server_process = subprocess.Popen(
         ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"],
         stdout=subprocess.PIPE,
