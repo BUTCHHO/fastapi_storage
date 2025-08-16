@@ -3,11 +3,10 @@ from exceptions import EntityDoesNotExists, PathGoesBeyondLimits, APIPathGoesBey
 
 
 class DeleteEntityHandler:
-    def __init__(self, path_ensurer, storage_writer, path_joiner, logger):
+    def __init__(self, path_ensurer, storage_writer, path_joiner):
         self.path_ensurer = path_ensurer
         self.storage_writer: IStorageWriter = storage_writer
         self.path_joiner = path_joiner
-        self.logger = logger
 
     def delete_entity(self, storage_id, path_in_storage):
         try:
@@ -20,5 +19,3 @@ class DeleteEntityHandler:
             raise APIPathGoesBeyondLimits(path_in_storage)
         except EntityDoesNotExists:
             raise APIEntityDoesNotExists(path_in_storage)
-        except Exception as e:
-            self.logger.log(e)

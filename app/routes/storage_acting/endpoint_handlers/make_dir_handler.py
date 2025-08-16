@@ -6,8 +6,7 @@ from exceptions import APIEntityIsNotADir, APIEntityDoesNotExists
 
 
 class MakeDirHandler:
-    def __init__(self, logger, storage_writer, path_joiner, path_ensurer):
-        self.logger = logger
+    def __init__(self, storage_writer, path_joiner, path_ensurer):
         self.storage_writer: IStorageWriter = storage_writer
         self.path_joiner = path_joiner
         self.path_ensurer = path_ensurer

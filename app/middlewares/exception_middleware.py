@@ -1,4 +1,5 @@
 from fastapi import HTTPException
+import logging
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response, JSONResponse
@@ -26,6 +27,7 @@ class ExceptionCatcherMiddleware(BaseHTTPMiddleware):
             DirectoryAlreadyExists: APIDirectoryAlreadyExists,
             UserStorageAlreadyExists: APIUserStorageAlreadyExists,
         }
+        self.logger = logging.getLogger(__name__)
         super().__init__(app, dispatch)
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         try:
@@ -34,11 +36,16 @@ class ExceptionCatcherMiddleware(BaseHTTPMiddleware):
         except Exception as e:
             exception_type = type(e)
             try:
-                http_exc = self.mapper[exception_type]()
-                return JSONResponse(status_code=http_exc.status_code, content={'detail':http_exc.detail})
+                http_exc = self.mapper[exception_type](e.args)
+
             except KeyError:
-                print('CAUGHT KEY ERROR')
-                raise
+                self.logger.exception('KEY ERROR')
+                raise ValueError('error logged. this will be automatically turned into 500 error')
+            except TypeError:
+                http_exc = self.mapper[exception_type]()
+            return JSONResponse(status_code=http_exc.status_code, content={'detail':http_exc.detail})
+
+#здесь пропадает какой либо смысл использовать HTTPException. статус код и детали можно хранить в обычном Exception питона
 
 
 
