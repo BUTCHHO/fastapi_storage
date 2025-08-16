@@ -1,6 +1,5 @@
 from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
-from pathlib import Path
+
 
 from contextlib import asynccontextmanager
 
@@ -13,13 +12,7 @@ from config import Config
 
 from .containers import Container
 
-print(__name__, 'ITS ME')
 
-browser_static_dir = Path(__file__).parent / 'routes/browser/static'
-global_static_dir = Path(__file__).parent / 'static'
-
-browser_static = StaticFiles(directory=browser_static_dir)
-global_static = StaticFiles(directory=global_static_dir)
 container = Container()
 
 
@@ -38,8 +31,6 @@ app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(ExceptionCatcherMiddleware)
 
-app.mount('/browser/static', browser_static, 'browser_static')
-app.mount('/static', global_static, 'static')
 
 app.include_router(browser_router)
 app.include_router(storage_acting_router)

@@ -38,17 +38,6 @@ async def authenticate(
     return {"message": 'successfully logged_in'}
 
 
-@auth_router.get('/profile', name='view-profile')
-def view_profile():
-    return {"message": 'not implemented'}
-
-@auth_router.get('/log-in', name='view-login')
-def view_login():
-    return {"message": 'not implemented'}
-
-@auth_router.get('/sign-up', name='view-sign_up')
-def view_sign_up():
-    return {"message": 'not implemented'}
 
 
 

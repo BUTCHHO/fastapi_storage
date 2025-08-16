@@ -9,7 +9,6 @@ class ModelReader(ParentAccess):
 
     @ParentAccess.async_connection
     async def get_by_kwargs(self,session, **kwargs):
-        print(self.engine.url, 'MY URL')
         statement = select(self.model).filter_by(**kwargs).limit(1)
         result = await session.execute(statement)
         return result.scalar_one_or_none()
