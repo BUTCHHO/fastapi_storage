@@ -29,21 +29,33 @@ class ExceptionCatcherMiddleware(BaseHTTPMiddleware):
         }
         self.logger = logging.getLogger(__name__)
         super().__init__(app, dispatch)
+
+    def return_error_json_response(self, exception):
+            exception_type = type(exception)
+            try:
+                http_exc = self.mapper[exception_type](exception.args)
+            except KeyError:
+                return self.log_error_and_return_500_error()
+            except TypeError:
+                http_exc = self.mapper[exception_type]()
+            return self.make_json_response(status_code=http_exc.status_code, detail=http_exc.detail)
+
+
+    def make_json_response(self, status_code, detail):
+        return JSONResponse(status_code=status_code, content={'detail': detail})
+
+    def log_error_and_return_500_error(self):
+        self.logger.exception('KEY ERROR')
+        return self.make_json_response(500, 'internal server error')
+
+
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         try:
             response = await call_next(request)
-            return response
         except Exception as e:
-            exception_type = type(e)
-            try:
-                http_exc = self.mapper[exception_type](e.args)
-            except KeyError:
-                self.logger.exception('KEY ERROR')
-                raise ValueError('error logged. this will be automatically turned into 500 error')
-            except TypeError:
-                http_exc = self.mapper[exception_type]()
-            return JSONResponse(status_code=http_exc.status_code, content={'detail':http_exc.detail})
-        #TODO refactor dispatch
+            response = self.return_error_json_response(e)
+
+        return response
 
 #здесь пропадает какой либо смысл использовать HTTPException. статус код и детали можно хранить в обычном Exception питона
 
