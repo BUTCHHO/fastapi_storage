@@ -8,6 +8,7 @@ Config.reconfigure_values_for_tests()
 client = Client()
 client.set_base_url('http://0.0.0.0:8000')
 
+
 def test_get_entities_no_params_no_login():
     response = client.get('/_get_entities')
     assert response.status_code == 401
@@ -80,6 +81,12 @@ def test_logout():
     response = client.get(url)
     assert response.status_code == 200
 
+def test_login_incorrect_password():
+    url = '/_log-in'
+    params = {'name':'tester1','password':'wrong osw'}
+    response = client.post(url, params)
+    assert response.status_code == 401
+
 def test_delete_acc():
     response_login = client.post('/_log-in', {'name':'tester1', 'password':'123'})
     assert response_login.status_code == 200
@@ -88,3 +95,11 @@ def test_delete_acc():
     assert response.status_code == 200
     response_login = client.post('/_log-in', {'name':'tester1', 'password':'123'})
     assert response_login.status_code == 404
+
+def test_login_to_not_existing_acc():
+    params = {'name':'i_dont_exists', 'password':'wrong'}
+    url = '_log-in'
+    response = client.post(url, params)
+    assert response.status_code == 404
+    assert response.json()['detail']['code'] == "user_dont_exists"
+
