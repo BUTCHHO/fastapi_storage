@@ -37,13 +37,13 @@ class ExceptionCatcherMiddleware(BaseHTTPMiddleware):
             exception_type = type(e)
             try:
                 http_exc = self.mapper[exception_type](e.args)
-
             except KeyError:
                 self.logger.exception('KEY ERROR')
                 raise ValueError('error logged. this will be automatically turned into 500 error')
             except TypeError:
                 http_exc = self.mapper[exception_type]()
             return JSONResponse(status_code=http_exc.status_code, content={'detail':http_exc.detail})
+        #TODO refactor dispatch
 
 #здесь пропадает какой либо смысл использовать HTTPException. статус код и детали можно хранить в обычном Exception питона
 

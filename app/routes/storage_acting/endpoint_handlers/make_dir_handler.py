@@ -1,7 +1,7 @@
 from path_explorator import EntityDoesNotExists, EntityIsNotADir
 
 from interfaces import IStorageWriter
-from exceptions import APIEntityIsNotADir, APIEntityDoesNotExists
+
 
 
 
@@ -14,11 +14,7 @@ class MakeDirHandler:
     def make_dir_in_storage(self,storage_id, path, name):
         if path is None:
             path = ''
-        try:
-            self.path_ensurer.ensure_path_safety(storage_id, path)
-            path_with_storage_id = self.path_joiner.join_paths(storage_id, path)
-            self.storage_writer.create_dir(path_with_storage_id, name)
-        except EntityDoesNotExists:
-            raise APIEntityDoesNotExists(path)
-        except EntityIsNotADir:
-            raise APIEntityIsNotADir(path)
+
+        self.path_ensurer.ensure_path_safety(storage_id, path)
+        path_with_storage_id = self.path_joiner.join_paths(storage_id, path)
+        self.storage_writer.create_dir(path_with_storage_id, name, exist_ok=False)

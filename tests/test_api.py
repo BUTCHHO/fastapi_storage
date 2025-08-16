@@ -18,6 +18,11 @@ def test_sign_up():
     response = client.post('/_sign-up', params=params)
     assert response.status_code == 200
 
+def test_sign_up_alreade_existing_user():
+    params = {'name':'tester1', 'password':'123'}
+    response = client.post('/_sign-up', params)
+    assert response.status_code == 409
+
 def test_sign_in():
     params = {'name': 'tester1', 'password': '123'}
     response = client.post('/_log-in', params=params)
@@ -34,6 +39,13 @@ def test_get_entities_no_params():
     assert type(entities['entities']) is list
     assert response.status_code == 200
 
+def test_get_entities_dont_exist():
+    params = {"path_in_storage":'this/dir/dont/exists'}
+    url = '/_get_entities'
+    response = client.get(url, params)
+    assert response.status_code == 404
+    assert response.json()['detail']['code'] == 'entity_does_not_exists'
+
 def test_make_dir_in_storage():
     url = '/make-dir-in-storage'
     params = {'name':'test_dir'}
@@ -43,6 +55,13 @@ def test_make_dir_in_storage():
     entities = response.json()
     assert '/test_dir' in entities['entities']
 
+def test_make_already_existing_dir():
+    url = '/make-dir-in-storage'
+    params = {'name':'test_dir'}
+    response = client.post(url, params)
+    assert response.status_code == 409
+    assert response.json()['detail']['code'] == 'directory_already_exists'
+
 def test_make_nested_dir():
     url = '/make-dir-in-storage'
     params = {'name':'nested_dir', 'path_in_storage':'test_dir'}
@@ -51,6 +70,13 @@ def test_make_nested_dir():
     response = client.get('/_get_entities', {'path_in_storage':'test_dir'})
     json = response.json()
     assert '/nested_dir' in json['entities']
+
+def test_get_entity():
+    url = '/_get_entities'
+    params = {'path_in_storage':'test_dir'}
+    response = client.get(url, params)
+    assert response.status_code == 200
+    assert response.json()['entities'] is not []
 
 def test_search_entity():
     url = '/_get_entities/search'
@@ -102,4 +128,3 @@ def test_login_to_not_existing_acc():
     response = client.post(url, params)
     assert response.status_code == 404
     assert response.json()['detail']['code'] == "user_dont_exists"
-

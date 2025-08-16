@@ -4,7 +4,7 @@ from aiofiles import open as aio_open
 from pathlib import Path
 
 
-from exceptions.path_exc import EntityDoesNotExists
+from exceptions.path_exc import EntityDoesNotExists, DirectoryAlreadyExists
 
 
 class StorageWriter:
@@ -46,6 +46,8 @@ class StorageWriter:
             root_dir.mkdir(exist_ok=exist_ok)
         except FileNotFoundError:
             raise EntityDoesNotExists('')
+        except FileExistsError:
+            raise DirectoryAlreadyExists()
     def create_file(self, path: str | None , name: str, exist_ok):
         """
         Create file in specified path with specified name

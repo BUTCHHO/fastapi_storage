@@ -33,6 +33,6 @@ class APIUserStorageAlreadyExists(HTTPException):
 class APIDirectoryAlreadyExists(HTTPException):
     def __init__(self, path):
         self.status_code = 409
-        self.detail = {"message": f'Directory at {path} already exists', "code":'diractory_already_exists'}
+        self.detail = {"message": f'Directory at {path} already exists', "code":'directory_already_exists'}
         super().__init__(self.status_code, self.detail)
 

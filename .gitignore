@@ -11,3 +11,5 @@ env/
 *.egg-info/
 *.egg
 all_code.txt
+storage/
+test_storage/
