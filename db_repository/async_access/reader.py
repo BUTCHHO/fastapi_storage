@@ -3,9 +3,9 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy import select
 
 class ModelReader(ParentAccess):
-    def __init__(self, model, logger, engine):
+    def __init__(self, model, engine):
         self.session = async_sessionmaker(engine, expire_on_commit=False)
-        super().__init__(model, logger, engine)
+        super().__init__(model, engine)
 
     @ParentAccess.async_connection
     async def get_by_kwargs(self,session, **kwargs):

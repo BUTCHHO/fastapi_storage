@@ -4,9 +4,8 @@ from asyncpg import UniqueViolationError
 from exceptions.database_repo import FieldUniqueViolation
 
 class ParentAccess:
-    def __init__(self, model, logger, engine):
+    def __init__(self, model, engine):
         self.model = model
-        self.logger = logger
         self.engine = engine
         self.async_session_maker = async_sessionmaker(engine)
 

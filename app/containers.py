@@ -1,6 +1,6 @@
 from dependency_injector import containers, providers
 from redis import Redis
-from utils import Logger, TimeHandler, PathCutter, PathJoiner, PathValidEnsurer, Hasher
+from utils import TimeHandler, PathCutter, PathJoiner, PathValidEnsurer, Hasher
 from logic import StorageReader, StorageWriter, Archivator, StorageDeleter
 from db_repository import ModelReader, ModelActor
 from auth.registration import Registrator
@@ -27,7 +27,6 @@ class Container(containers.DeclarativeContainer):
 
     async_engine_provider = providers.Object(async_engine)
 
-    logger = providers.Singleton(Logger)
     redis_client = providers.Singleton(Redis, host=config.CACHE_HOST, port=config.CACHE_PORT, decode_responses=True)
     path_joiner = providers.Singleton(PathJoiner, config.STORAGE_PATH)
     path_cutter = providers.Singleton(PathCutter, config.STORAGE_PATH)
@@ -39,10 +38,10 @@ class Container(containers.DeclarativeContainer):
     storage_deleter = providers.Singleton(StorageDeleter, storage_writer)
     hasher = providers.Singleton(Hasher)
     cacher = providers.Singleton(RedisCacher, redis_client, config.CACHE_EXPIRE_TIME)
-    user_reader = providers.Singleton(ModelReader, User, logger, async_engine_provider)
-    user_actor = providers.Singleton(ModelActor, User, logger, async_engine_provider)
-    session_reader = providers.Singleton(ModelReader, Session, logger, async_engine_provider)
-    session_actor = providers.Singleton(ModelActor, Session, logger, async_engine_provider)
+    user_reader = providers.Singleton(ModelReader, User, async_engine_provider)
+    user_actor = providers.Singleton(ModelActor, User, async_engine_provider)
+    session_reader = providers.Singleton(ModelReader, Session, async_engine_provider)
+    session_actor = providers.Singleton(ModelActor, Session, async_engine_provider)
     session_maker = providers.Singleton(SessionMaker, session_reader, session_actor, time_handler, hasher, cacher, config.SESSION_EXPIRE_TIME)
     user_getter = providers.Singleton(UserGetter, user_reader, session_reader, session_actor, cacher, time_handler)
     user_registrator = providers.Singleton(Registrator, user_actor, user_reader, hasher)

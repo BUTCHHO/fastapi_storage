@@ -6,8 +6,8 @@ from exceptions.database_repo import FieldUniqueViolation
 
 
 class ModelActor(ParentAccess):
-    def __init__(self, model, logger, engine):
-        super().__init__(model,logger,engine)
+    def __init__(self, model, engine):
+        super().__init__(model,engine)
 
     def create_record(self, **kwargs):
         return self.model(**kwargs)
