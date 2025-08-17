@@ -59,6 +59,8 @@ class IStorageWriter(ABC):
 class IArchivator(ABC):
     @abstractmethod
     def create_large_zip(self, path: str) -> str: pass
+    @abstractmethod
+    def delete_zip(self, zip_path: str) -> None: pass
 
 class IPathValidator(ABC):
     @abstractmethod

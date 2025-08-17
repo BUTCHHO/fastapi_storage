@@ -13,6 +13,7 @@ class Config:
     CACHE_HOST = getenv('CACHE_HOST')
     CACHE_PORT = int(getenv('CACHE_PORT'))
     CACHE_EXPIRE_TIME = getenv('CACHE_EXPIRE_TIME_SECONDS')
+    ZIPS_PATH = getenv('ZIPS_PATH')
 
     @classmethod
     def to_dict(cls):
@@ -23,14 +24,19 @@ class Config:
                   'SESSION_COOKIES_EXPIRE_TIME': cls.SESSION_COOKIES_EXPIRE_TIME,
                   'CACHE_HOST': cls.CACHE_HOST,
                   'CACHE_PORT': cls.CACHE_PORT,
-                  'CACHE_EXPIRE_TIME': cls.CACHE_EXPIRE_TIME}
+                  'CACHE_EXPIRE_TIME': cls.CACHE_EXPIRE_TIME,
+                  'ZIPS_PATH': cls.ZIPS_PATH,
+                  }
+
         return config
+
 
     @classmethod
     def reconfigure_values_for_tests(cls):
         cls.STORAGE_PATH = getenv('TEST_STORAGE_PATH')
         cls.DATABASE_URL = getenv('TEST_DATABASE_URL')
         cls.CACHE_PORT = getenv('TEST_CACHE_PORT')
+        cls.ZIPS_PATH = getenv('TEST_ZIPS_PATH')
         cls.assert_not_none()
 
     @classmethod
@@ -43,5 +49,5 @@ class Config:
         assert cls.CACHE_PORT is not None
         assert cls.CACHE_HOST is not None
         assert cls.CACHE_EXPIRE_TIME is not None
-
+        assert cls.ZIPS_PATH is not None
 Config.assert_not_none()
