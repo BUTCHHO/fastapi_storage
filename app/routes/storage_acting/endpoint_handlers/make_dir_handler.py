@@ -17,4 +17,4 @@ class MakeDirHandler:
 
         self.path_ensurer.ensure_path_safety(storage_id, path)
         path_with_storage_id = self.path_joiner.join_paths(storage_id, path)
-        self.storage_writer.create_dir(path_with_storage_id, name, exist_ok=False)
+        self.storage_writer.create_dir(path=path_with_storage_id, name=name, exist_ok=False)
