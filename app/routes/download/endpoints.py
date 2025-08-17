@@ -1,4 +1,5 @@
-from fastapi import BackgroundTasks, Request, Depends, Query
+from fastapi import BackgroundTasks, Request, Depends, Query, Response
+from starlette.responses import FileResponse
 
 from .schemas.query import DownloadQuery
 from app.containers import Container
@@ -17,6 +18,6 @@ async def download_entity_endpoint(
         archivator=Depends(Provide[Container.archivator])
         ):
     user = await auth_depend.auth(request)
-    response = file_response_handler.get_response(user.storage_id, params.entity_path_in_storage)
-    background_tasks.add_task(archivator.cleanup_temp_files)
+    response: FileResponse = file_response_handler.get_response(user.storage_id, params.entity_path_in_storage)
+    background_tasks.add_task(archivator.delete_zip, response.filename)
     return response

@@ -31,7 +31,7 @@ class Container(containers.DeclarativeContainer):
     path_joiner = providers.Singleton(PathJoiner, config.STORAGE_PATH)
     path_cutter = providers.Singleton(PathCutter, config.STORAGE_PATH)
     path_ensurer = providers.Singleton(PathValidEnsurer, config.STORAGE_PATH, path_cutter, path_joiner)
-    archivator = providers.Singleton(Archivator)
+    archivator = providers.Singleton(Archivator, config.ZIPS_PATH)
     time_handler = providers.Singleton(TimeHandler)
     storage_reader = providers.Singleton(StorageReader, config.STORAGE_PATH, path_joiner, path_cutter)
     storage_writer = providers.Singleton(StorageWriter, config.STORAGE_PATH)
