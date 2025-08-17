@@ -10,13 +10,16 @@ class Archivator:
     def create_path_to_zip(self, archivable_dir):
         return self.zip_dir / f"{archivable_dir.name}.zip"
 
-    def write_from_dir_to_zip(self, dir, zip):
-        with ZipFile(zip, mode='w', compression=ZIP_DEFLATED, allowZip64=True, compresslevel=6) as zipf:
-            for file_path in dir.rglob('*'):
+    def write_from_dir_to_zip(self, archivable_dir, zip_path):
+        with ZipFile(zip_path, mode='w', compression=ZIP_DEFLATED, allowZip64=True, compresslevel=6) as zipf:
+            print('here i am')
+            for file_path in archivable_dir.rglob('*'):
+                print(file_path, 'its file path')
                 if file_path.is_file():
-                    entity = file_path.relative_to(dir)
+                    entity = file_path.relative_to(archivable_dir)
                     zipf.write(file_path, entity)
 
+            print('im done')
     def delete_zip(self, zip_name):
         Path(self.zip_dir, zip_name).unlink(missing_ok=True)
 

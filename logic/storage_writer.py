@@ -24,7 +24,7 @@ class StorageWriter:
             raise EntityDoesNotExists(path)
 
 
-    def create_dir(self, path: str | None, name:str, exist_ok=True):
+    def create_dir(self, name:str, path: str | None = None, exist_ok=True):
         """
         Creates directory/folder in specified path with specified name
         :param path: Path to the location of the future directory.
