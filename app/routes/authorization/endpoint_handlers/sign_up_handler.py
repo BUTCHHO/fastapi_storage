@@ -21,7 +21,7 @@ class SignUpHandler:
     async def create_user_storage(self, user):
         try:
             storage_id = self.hasher.generate_hash(self.STORAGE_ID_LEN)
-            self.storage_writer.create_dir('', storage_id, exist_ok=False)
+            self.storage_writer.create_dir(path='', name=storage_id, exist_ok=False)
             await self.user_actor.change_values_by_kwargs(new_values={'storage_id':storage_id}, name=user.name)
         except FileExistsError:
             raise UserStorageAlreadyExists

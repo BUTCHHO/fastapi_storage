@@ -1,6 +1,8 @@
 __pycache__/
 *.py[cod]
 *$py.class
+zips/
+test_zips/
 venv/
 .venv/
 env/
