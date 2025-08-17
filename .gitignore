@@ -1,4 +1,7 @@
 __pycache__/
+**/__pycache__/
+zips/
+test_zips/
 *.py[cod]
 *$py.class
 zips/
