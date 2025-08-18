@@ -39,3 +39,7 @@ def test_create_large_zip(archivator, storage_reader, storage_actor):
     assert zip_path.name == expected_zip_name
 
     assert zip_path.stat().st_size > 22
+
+    #TODO рефактор этого ужаса
+
+    #TODO тесты удаления архива

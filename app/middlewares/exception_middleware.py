@@ -1,13 +1,14 @@
-from fastapi import HTTPException
 import logging
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response, JSONResponse
+
+from exceptions import APIUnsupportedEntityType
 from exceptions.auth_http_exc import APIUnauthorized, APISessionExpired, APISessionDontExists, APIUserDontExists, APIUserAlreadyExists, APIIncorrectPassword
 from exceptions.http_files_exc import APITooManyFiles
 from exceptions.path_http_exc import APIEntityDoesNotExists, APIEntityIsNotADir,APIDirectoryAlreadyExists,APIUserStorageAlreadyExists,APIPathGoesBeyondLimits
 from auth.exceptions import Unauthorized, SessionExpired, SessionDontExists, UserDontExists, UserAlreadyExists, IncorrectPassword
-from exceptions.path_exc import EntityDoesNotExists, TooManyFiles,  EntityIsNotADir, PathGoesBeyondLimits, UserStorageAlreadyExists, DirectoryAlreadyExists
+from exceptions.path_exc import EntityDoesNotExists,UnsupportedEntityType, TooManyFiles,  EntityIsNotADir, PathGoesBeyondLimits, UserStorageAlreadyExists, DirectoryAlreadyExists
 
 
 
@@ -26,18 +27,19 @@ class ExceptionCatcherMiddleware(BaseHTTPMiddleware):
             EntityDoesNotExists: APIEntityDoesNotExists,
             DirectoryAlreadyExists: APIDirectoryAlreadyExists,
             UserStorageAlreadyExists: APIUserStorageAlreadyExists,
+            UnsupportedEntityType: APIUnsupportedEntityType,
         }
         self.logger = logging.getLogger(__name__)
         super().__init__(app, dispatch)
 
     def return_error_json_response(self, exception):
             exception_type = type(exception)
+            print(exception_type, 'exc type')
+            print(exception_type in self.mapper.keys())
             try:
-                http_exc = self.mapper[exception_type](exception.args)
+                http_exc = self.mapper[exception_type]()
             except KeyError:
                 return self.log_error_and_return_500_error()
-            except TypeError:
-                http_exc = self.mapper[exception_type]()
             return self.make_json_response(status_code=http_exc.status_code, detail=http_exc.detail)
 
 
@@ -54,7 +56,7 @@ class ExceptionCatcherMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
         except Exception as e:
             response = self.return_error_json_response(e)
-
+            #TODO пофиксить баг при котором подставляется неверный аргумент для исключений
         return response
 
 #здесь пропадает какой либо смысл использовать HTTPException. статус код и детали можно хранить в обычном Exception питона

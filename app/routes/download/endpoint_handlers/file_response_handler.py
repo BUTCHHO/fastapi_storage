@@ -1,7 +1,8 @@
 from fastapi.responses import FileResponse
 
 from interfaces import IStorageReader, IArchivator, ILogger
-from exceptions import APIEntityDoesNotExists, APIUnsupportedEntityType
+from exceptions.path_exc import EntityDoesNotExists
+from exceptions.path_exc import UnsupportedEntityType
 from utils import get_encoded_string
 
 
@@ -38,11 +39,11 @@ class FileResponseHandler:
         entity_path_in_storage = self.path_joiner.join_paths(storage_id, entity_path_in_storage)
         self.ensurer.ensure_path_safety(storage_id, entity_path_in_storage)
         if not self.ensurer.is_exists(entity_path_in_storage):
-            raise APIEntityDoesNotExists(entity_path_in_storage)
+            raise EntityDoesNotExists(entity_path_in_storage)
         if self.storage_reader.is_dir(entity_path_in_storage):
             return self.get_zip_file_response(entity_path_in_storage)
         elif self.storage_reader.is_file(entity_path_in_storage):
             return self.get_file_response(entity_path_in_storage)
         else:
-            raise APIUnsupportedEntityType(entity_path_in_storage=entity_path_in_storage)
+            raise UnsupportedEntityType(path=entity_path_in_storage)
 
