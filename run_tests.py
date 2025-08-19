@@ -36,7 +36,7 @@ def prepare_for_tests():
     asyncio.run(prepare_tables())
 
 def run_tests():
-    pytest.main(['-v','-s', 'tests/test_api.py'])
+    pytest.main(['-v','-s', 'tests/api.py'])
 
 def run():
     print('preparing')

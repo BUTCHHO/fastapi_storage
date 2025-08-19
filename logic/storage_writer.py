@@ -13,6 +13,13 @@ class StorageWriter:
             raise TypeError(f'root_dir_abs_path argument must be str, not {type(root_dir_abs_path)}')
         self.root_dir = Path(root_dir_abs_path)
 
+    def delete_all_entities_in_dir(self, path_to_dir=''):
+        """deletes all entities in dir excluding this dir"""
+        path = Path(path_to_dir)
+        for name, path in path.iterdir():
+            print(name, 'name')
+            print(path, 'path')
+
     def delete_entity(self, path: str | None):
         entity = Path(self.root_dir, path)
         if entity.exists():
