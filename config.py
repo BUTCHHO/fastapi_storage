@@ -14,6 +14,7 @@ class Config:
     CACHE_PORT = int(getenv('CACHE_PORT'))
     CACHE_EXPIRE_TIME = getenv('CACHE_EXPIRE_TIME_SECONDS')
     ZIPS_PATH = getenv('ZIPS_PATH')
+    DIR_FOR_TESTS = getenv('DIR_FOR_TESTS')
 
     @classmethod
     def to_dict(cls):
@@ -50,4 +51,5 @@ class Config:
         assert cls.CACHE_HOST is not None
         assert cls.CACHE_EXPIRE_TIME is not None
         assert cls.ZIPS_PATH is not None
+        assert cls.DIR_FOR_TESTS is not None
 Config.assert_not_none()
