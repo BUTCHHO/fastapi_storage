@@ -1,21 +1,21 @@
 class TooManyFiles(Exception):
     def __init__(self):
-        msg = 'Too many files uploaded'
-        super().__init__(msg)
+        self.detail = 'Too many files uploaded'
+        super().__init__(self.detail)
 
 class PathGoesBeyondLimits(Exception):
     def __init__(self, path):
-        self.msg = f'path {path} goes beyond permitted limits'
+        self.detail = f'path {path} goes beyond permitted limits'
         super().__init__(self.detail)
 
 class EntityDoesNotExists(Exception):
-    def __init__(self, entity_path):
-        self.msg = f"File or directory does not exists at {entity_path}"
-        super().__init__(self.msg)
+    def __init__(self, entity_path=None):
+        self.detail = f"File or directory does not exists {entity_path}"
+        super().__init__(self.detail)
 
 class EntityIsNotADir(Exception):
-    def __init__(self, entity_path):
-        self.detail = f'Entity at {entity_path} is not a directory'
+    def __init__(self, entity_path=None):
+        self.detail = f'Entity {entity_path} is not a directory'
         super().__init__(self.detail)
 
 

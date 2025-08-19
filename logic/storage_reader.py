@@ -56,9 +56,9 @@ class StorageReader:
             raise TypeError(f'dirpath arg must be str, not {type(dirpath)}')
         path = Path(self.root_dir, dirpath)
         if not path.exists():
-            raise EntityDoesNotExists(dirpath)
+            raise EntityDoesNotExists()
         if not path.is_dir():
-            raise EntityIsNotADir(dirpath)
+            raise EntityIsNotADir()
         entities_names = [self._path_cutter.cut_path(str(entity), str(path)) for entity in path.iterdir()]
         return entities_names
 

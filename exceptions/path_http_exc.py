@@ -13,8 +13,8 @@ class APIPathGoesBeyondLimits(HTTPException):
         super().__init__(status_code=self.status_code, detail=self.detail)
 
 class APIEntityDoesNotExists(HTTPException):
-    def __init__(self, path_in_storage):
-        self.detail = {"message": f'entity at {path_in_storage} does not exists', "code": 'entity_does_not_exists'}
+    def __init__(self, path_in_storage=''):
+        self.detail = {"message": f'entity does not exists {path_in_storage}', "code": 'entity_does_not_exists'}
         self.status_code = 404
         super().__init__(status_code=self.status_code, detail=self.detail)
 
@@ -31,8 +31,8 @@ class APIUserStorageAlreadyExists(HTTPException):
         super().__init__(self.status_code, self.detail)
 
 class APIDirectoryAlreadyExists(HTTPException):
-    def __init__(self, path):
+    def __init__(self, path=''):
         self.status_code = 409
-        self.detail = {"message": f'Directory at {path} already exists', "code":'directory_already_exists'}
+        self.detail = {"message": f'Directory {path} already exists', "code":'directory_already_exists'}
         super().__init__(self.status_code, self.detail)
 
