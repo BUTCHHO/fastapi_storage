@@ -34,8 +34,6 @@ class ExceptionCatcherMiddleware(BaseHTTPMiddleware):
 
     def return_error_json_response(self, exception):
             exception_type = type(exception)
-            print(exception_type, 'exc type')
-            print(exception_type in self.mapper.keys())
             try:
                 http_exc = self.mapper[exception_type]()
             except KeyError:
@@ -56,7 +54,6 @@ class ExceptionCatcherMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
         except Exception as e:
             response = self.return_error_json_response(e)
-            #TODO пофиксить баг при котором подставляется неверный аргумент для исключений
         return response
 
 #здесь пропадает какой либо смысл использовать HTTPException. статус код и детали можно хранить в обычном Exception питона

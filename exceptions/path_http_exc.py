@@ -1,13 +1,13 @@
 from fastapi import HTTPException
 
 class APIEntityIsNotADir(HTTPException):
-    def __init__(self, path_in_storage):
+    def __init__(self, path_in_storage=''):
         self.detail = {'message': f'entity at {path_in_storage} is not a directory', 'code':'entity_is_not_a_dir'}
         self.status_code = 400
         super().__init__(self.status_code, self.detail)
 
 class APIPathGoesBeyondLimits(HTTPException):
-    def __init__(self, path_in_storage):
+    def __init__(self, path_in_storage=''):
         self.detail = {"message": f'path {path_in_storage} is goes beyond limits', "code": 'path_goes_beyond_limits'}
         self.status_code = 403
         super().__init__(status_code=self.status_code, detail=self.detail)
@@ -19,7 +19,7 @@ class APIEntityDoesNotExists(HTTPException):
         super().__init__(status_code=self.status_code, detail=self.detail)
 
 class APIUnsupportedEntityType(HTTPException):
-    def __init__(self, entity_path_in_storage):
+    def __init__(self, entity_path_in_storage=''):
         self.detail = {"message":f'unsupported entity type {entity_path_in_storage}', "code":'unsupported_entity_type'}
         self.status_code = 415
         super().__init__(self.status_code, self.detail)
