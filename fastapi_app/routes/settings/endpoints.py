@@ -1,7 +1,7 @@
 from fastapi import Depends, Query, Request, Response
 
 from .schemas.query import AccountDeleteQuery
-from app.containers import Container
+from fastapi_app.containers import Container
 from dependency_injector.wiring import inject, Provide
 
 from .router import settings_router

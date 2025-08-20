@@ -1,7 +1,7 @@
 from fastapi import BackgroundTasks, Request, Depends, Query
 from interfaces.interfaces import IArchivator
 from .schemas.query import DownloadQuery
-from app.containers import Container
+from fastapi_app.containers import Container
 from dependency_injector.wiring import inject, Provide
 
 from .router import download_router

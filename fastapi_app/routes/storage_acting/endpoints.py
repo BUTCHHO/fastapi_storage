@@ -1,7 +1,7 @@
 from fastapi import Depends, Query, Request
 
 from .schemas.query import MakeDirInStorageQuery, DeleteEntityQuery
-from app.containers import Container
+from fastapi_app.containers import Container
 from dependency_injector.wiring import inject, Provide
 
 from .router import storage_acting_router

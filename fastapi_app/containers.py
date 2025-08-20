@@ -12,12 +12,12 @@ from cache_handler import RedisCacher
 from alchemy import User, Session
 from alchemy.async_engine import async_engine
 
-from app.routes.storage_acting.endpoint_handlers import MakeDirHandler, DeleteEntityHandler
-from app.routes.upload.endpoint_handlers import UploadFileHandler
-from app.routes.settings.endpoint_handlers import SettingsHandler
-from app.routes.authorization.endpoint_handlers import SignUpHandler, LogOutHandler, AuthHandler
-from app.routes.browser.handlers import BrowserEndpointHandler
-from app.routes.download.endpoint_handlers import FileResponseHandler
+from fastapi_app.routes.storage_acting.endpoint_handlers import MakeDirHandler, DeleteEntityHandler
+from fastapi_app.routes.upload.endpoint_handlers import UploadFileHandler
+from fastapi_app.routes.settings.endpoint_handlers import SettingsHandler
+from fastapi_app.routes.authorization.endpoint_handlers import SignUpHandler, LogOutHandler, AuthHandler
+from fastapi_app.routes.browser.handlers import BrowserEndpointHandler
+from fastapi_app.routes.download.endpoint_handlers import FileResponseHandler
 
 from depends.auth import AuthDepend
 

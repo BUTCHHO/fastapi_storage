@@ -1,6 +1,6 @@
 from fastapi import Request, Response, Query, Depends
 from .schemas.query import AuthenticateQuery, SignUpQuery
-from app.containers import Container
+from fastapi_app.containers import Container
 from dependency_injector.wiring import inject, Provide
 
 from .router import auth_router

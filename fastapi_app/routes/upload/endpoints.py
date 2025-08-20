@@ -1,6 +1,6 @@
 from fastapi import UploadFile, Query, Depends, Request
 from .schemas.query import UploadQuery
-from app.containers import Container
+from fastapi_app.containers import Container
 from dependency_injector.wiring import inject, Provide
 
 from .router import upload_router
