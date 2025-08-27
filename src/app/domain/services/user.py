@@ -14,9 +14,12 @@ from app.domain.enums.repository_statuses import RepositoryStatus
 
 from app.domain.exceptions.user import UserRoleIsNotChangeable
 
+from app.domain.ports.user_id_generator import UserIdGenerator
+from app.domain.ports.password_hasher import PasswordHasher
+
 
 class UserService:
-    def __init__(self, user_id_generator, password_hasher):
+    def __init__(self, user_id_generator: UserIdGenerator, password_hasher: PasswordHasher):
         self._user_id_generator = user_id_generator
         self._password_hasher = password_hasher
 
@@ -26,7 +29,7 @@ class UserService:
         raw_password: RawPassword,
         role: UserRole,
     ):
-        user_id = UserID(self._user_id_generator())
+        user_id = UserID(self._user_id_generator.generate_id())
         password_hash = UserPasswordHash(self._password_hasher.hash(raw_password))
 
         return User(
@@ -61,16 +64,25 @@ class UserService:
             raise DomainError(f"User{user.id_} is not attached to repository {repository_id}")
         user.repositories_roles.pop(repository_id)
 
-    def is_able_to_read_repo(self, user: User, repo: Repository):
+    def is_repo_reader(self, user: User, repo: Repository):
         if repo.status == RepositoryStatus.PUBLIC:
             return True
-        if repo.id in user.repositories_roles.keys():
+        if repo.id not in user.repositories_roles.keys():
+            return False
+        if user.repositories_roles[repo.id] == UserRepositoryRole.READER:
             return True
         return False
 
-    def is_able_to_contribute_repo(self, user: User, repo: Repository):
+    def is_repo_contributor(self, user: User, repo: Repository):
         if repo.id not in user.repositories_roles.keys():
             return False
-        if user.repositories_roles[repo.id] > UserRepositoryRole.READER:
+        if user.repositories_roles[repo.id] == UserRepositoryRole.CONTRIBUTOR:
+            return True
+        return False
+
+    def is_repo_owner(self, user: User, repo: Repository):
+        if repo.id not in user.repositories_roles.keys():
+            return False
+        if user.repositories_roles[repo.id] == UserRepositoryRole.OWNER:
             return True
         return False
