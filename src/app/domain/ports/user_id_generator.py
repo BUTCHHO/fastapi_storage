@@ -4,4 +4,4 @@ from uuid import UUID
 
 class UserIdGenerator(Protocol):
 
-    def generate_id(self) -> UUID: pass
+    def generate_id(self) -> UUID: ...
