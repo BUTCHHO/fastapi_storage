@@ -1,4 +1,12 @@
-class UserRoleIsNotChangeable(Exception):
+from app.domain.exceptions.base import DomainError
+
+
+class UserRoleIsNotChangeable(DomainError):
     def __init__(self):
         msg = 'User role change is not permitted'
+        super().__init__(msg)
+
+class UserNameAlreadyExists(DomainError):
+    def __init__(self):
+        msg = "User Name already exists"
         super().__init__(msg)
