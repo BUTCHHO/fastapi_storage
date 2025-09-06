@@ -6,6 +6,11 @@ class UserRoleIsNotChangeable(DomainError):
         msg = 'User role change is not permitted'
         super().__init__(msg)
 
+class UserRepositoryRoleIsNotChangeable(DomainError):
+    def __init__(self):
+        msg='User repository role change is not permitted'
+        super().__init__(msg)
+        
 class UserNameAlreadyExists(DomainError):
     def __init__(self):
         msg = "User Name already exists"

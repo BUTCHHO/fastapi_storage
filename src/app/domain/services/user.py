@@ -12,7 +12,8 @@ from app.domain.entities.repository import Repository
 from app.domain.enums.user_roles import UserRole, UserRepositoryRole
 from app.domain.enums.repository_statuses import RepositoryStatus
 
-from app.domain.exceptions.user import UserRoleIsNotChangeable
+from app.domain.exceptions.user import UserRoleIsNotChangeable, UserActivationIsNotPermitted, \
+    UserRepositoryRoleIsNotChangeable
 
 from app.domain.ports.user_id_generator import UserIdGenerator
 from app.domain.ports.password_hasher import PasswordHasher
@@ -37,6 +38,7 @@ class UserService:
             user_name=username,
             password_hash=password_hash,
             user_role=role,
+            is_active=True,
         )
 
     def verify_password(self, user, raw_password):
@@ -54,9 +56,11 @@ class UserService:
             return
         raise UserRoleIsNotChangeable()
 
-    def attach_repo_role_to_user(self, user: User, repo_id:RepositoryID, user_repo_roles:type(UserRepositoryRole.READER)):
+    def attach_repo_role_to_user(self, user: User, repo_id:RepositoryID, user_repo_role:UserRepositoryRole):
         """gives ability to user to interact with repo"""
-        user.repositories_roles[repo_id] = user_repo_roles
+        if user.user_role[repo_id] == UserRepositoryRole.OWNER:
+            raise UserRepositoryRoleIsNotChangeable
+        user.repositories_roles[repo_id] = user_repo_role
 
     def detach_user_from_repo(self, user: User, repository_id:RepositoryID):
         """removes from user ability to interact with repo"""
@@ -89,5 +93,5 @@ class UserService:
 
     def toggle_user_activation(self, user: User, is_active: bool):
         if not user.user_role.is_changeable:
-            raise UserRoleChangeIsNotPermitted
+            raise UserActivationIsNotPermitted
         user.is_active = is_active
