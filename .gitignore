@@ -19,3 +19,5 @@ env/
 all_code.txt
 storage/
 test_storage/
+dist/
+.
