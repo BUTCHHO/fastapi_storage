@@ -13,7 +13,7 @@ from app.domain.enums.user_roles import UserRole, UserRepositoryRole
 from app.domain.enums.repository_statuses import RepositoryStatus
 
 from app.domain.exceptions.user import UserRoleIsNotChangeable, UserActivationIsNotPermitted, \
-    UserRepositoryRoleIsNotChangeable
+    UserRepositoryRoleIsNotChangeable, UserRoleIsNotDetachable
 
 from app.domain.ports.user_id_generator import UserIdGenerator
 from app.domain.ports.password_hasher import PasswordHasher
@@ -65,7 +65,8 @@ class UserService:
     def detach_user_from_repo(self, user: User, repository_id:RepositoryID):
         """removes from user ability to interact with repo"""
         if repository_id not in user.repositories_roles.keys():
-            raise DomainError(f"User{user.id_} is not attached to repository {repository_id}")
+            raise UserRoleIsNotDetachable()
+
         user.repositories_roles.pop(repository_id)
 
     def is_repo_reader(self, user: User, repo: Repository):

@@ -17,7 +17,7 @@ class MakeRepoContributorQuery:
     repo_id: RepositoryID
     user_name: UserName
 
-class MakeRepoContributorCommand(Command)
+class MakeRepoContributorCommand(Command):
     def __init__(self,
                  user_command_gateway: UserCommandGateway,
                  user_service: UserService,

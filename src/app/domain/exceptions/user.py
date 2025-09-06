@@ -31,3 +31,7 @@ class UserActivationIsNotPermitted(DomainError):
         msg = 'user activation is not permitted'
         super().__init__(msg)
 
+class UserRoleIsNotDetachable(DomainError):
+    def __init__(self):
+        msg = 'user role detach is not permitted'
+        super().__init__(msg)
