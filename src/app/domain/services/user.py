@@ -86,3 +86,13 @@ class UserService:
         if user.repositories_roles[repo.id] == UserRepositoryRole.OWNER:
             return True
         return False
+
+    def activate_user(self, user: User):
+        if user.is_active:
+            raise DomainError(f"User{user.id_} is already active")
+        user.is_active = True
+
+    def deactivate_user(self, user: User):
+        if not user.is_active:
+            raise DomainError(f"User{user.id_} is already inactive")
+        user.is_active = False

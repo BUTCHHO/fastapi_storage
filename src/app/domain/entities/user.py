@@ -16,4 +16,5 @@ class User(Entity):
     user_name: UserName
     password_hash: UserPasswordHash
     user_role: UserRole
+    is_active: bool
     repositories_roles: Dict[RepositoryID, UserRepositoryRole] = field(default_factory=dict)
