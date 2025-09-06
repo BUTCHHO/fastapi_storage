@@ -87,12 +87,7 @@ class UserService:
             return True
         return False
 
-    def activate_user(self, user: User):
-        if user.is_active:
-            raise DomainError(f"User{user.id_} is already active")
-        user.is_active = True
-
-    def deactivate_user(self, user: User):
-        if not user.is_active:
-            raise DomainError(f"User{user.id_} is already inactive")
-        user.is_active = False
+    def toggle_user_activation(self, user: User, is_active: bool):
+        if not user.user_role.is_changeable:
+            raise UserRoleChangeIsNotPermitted
+        user.is_active = is_active

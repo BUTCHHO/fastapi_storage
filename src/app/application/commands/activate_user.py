@@ -33,18 +33,13 @@ class ActivateUserCommand(Command):
         self._transaction_manager = transaction_manager
         self._user_service = user_service
 
-    def execute(self, username: UserName) -> UserCreateResponse:
-        user = self._user_command_gateway.read_by_username(username, for_update=True)
+    async def execute(self, username: UserName):
+        user = await self._user_command_gateway.read_by_username(username, for_update=True)
 
         if user is None:
             logger.info(f"User {username} not found")
             raise UserDontExists
 
-        try:
-            self._user_service.activate_user(user)
-        except DomainError:
-            logger.info(f"User {username} is already active")
-            raise
-
-        self._transaction_manager.commit()
+        self._user_service.toggle_user_activation(user, is_active=True)
+        await self._transaction_manager.commit()
 

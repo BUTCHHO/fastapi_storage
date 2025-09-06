@@ -20,3 +20,9 @@ class UserIsInactive(DomainError):
     def __init__(self):
         msg = "user is inactive"
         super().__init__(msg)
+
+class UserActivationIsNotPermitted(DomainError):
+    def __init__(self):
+        msg = 'user activation is not permitted'
+        super().__init__(msg)
+
