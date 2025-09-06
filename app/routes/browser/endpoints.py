@@ -1,7 +1,7 @@
 from fastapi import Depends, Query, Request
 
 
-from fastapi_app.containers import Container
+from app.containers import Container
 from dependency_injector.wiring import inject, Provide
 
 from .schemas.response import GetEntitiesResponse, SearchEntitiesResponse
