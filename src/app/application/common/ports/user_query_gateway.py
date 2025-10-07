@@ -15,7 +15,7 @@ class UserQueryGateway(Protocol):
         :raises: DataMapperError
         """
 
-    async def read_all(self) -> List[User]:
+    async def read_all(self, limit:int, offset:int) -> List[User]:
         """
         :raises: DataMapperError
         """
