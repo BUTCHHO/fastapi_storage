@@ -14,3 +14,9 @@ class UserCommandGateway(Protocol):
         """
         :raises: DataMapperError
         """
+
+    async def delete_user_by_username(self, username: UserName) -> None:
+        """
+        :raises: DataMapperError
+        :raises: UserDontExistError
+        """

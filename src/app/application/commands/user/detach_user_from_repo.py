@@ -2,10 +2,9 @@ from dataclasses import dataclass
 from logging import getLogger
 
 from app.application.commands.base import Command
-from app.application.commands.create_user import UserCreateResponse
 from app.application.common.ports.user_command_gateway import UserCommandGateway
 from app.application.common.ports.transaction_manager import TransactionManager
-from app.domain.exceptions.user import UserRepositoryRoleIsNotChangeable, UserRoleIsNotDetachable
+from app.domain.exceptions.user import UserRoleIsNotDetachable
 from app.domain.services.user import UserService
 from app.domain.value_objects.repository.repository_id import RepositoryID
 from app.domain.value_objects.user.user_name.user_name import UserName

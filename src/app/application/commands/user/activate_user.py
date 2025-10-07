@@ -1,14 +1,11 @@
 from dataclasses import dataclass
 from logging import getLogger
 
-from app.application.commands.create_user import UserCreateResponse
 from app.application.common.ports.flusher import Flusher
 from app.application.common.ports.transaction_manager import TransactionManager
 from app.application.common.ports.user_command_gateway import UserCommandGateway
-from app.domain.exceptions.base import DomainError
 from app.domain.exceptions.user import UserDontExists
 from app.domain.services.user import UserService
-from app.domain.value_objects.user.user_id import UserID
 from app.domain.value_objects.user.user_name.user_name import UserName
 
 from app.application.commands.base import Command

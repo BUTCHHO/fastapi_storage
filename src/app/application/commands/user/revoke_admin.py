@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from logging import getLogger
-
 from app.application.commands.base import Command
 from app.application.common.ports.transaction_manager import TransactionManager
 from app.application.common.ports.user_command_gateway import UserCommandGateway
