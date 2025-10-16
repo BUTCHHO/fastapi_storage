@@ -1,0 +1,3 @@
+from app.application.common.ports.identity_provider import IdentityProvider
+
+class IdentityProviderMock(IdentityProvider): ...

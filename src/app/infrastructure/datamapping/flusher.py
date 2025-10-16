@@ -1,0 +1,3 @@
+from app.application.common.ports.flusher import Flusher
+
+class FlusherMock(Flusher): ...
